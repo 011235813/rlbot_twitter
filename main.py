@@ -18,8 +18,10 @@ import Queue
 
 class main:
 
-    def __init__(self, init_bots=1, init_observer=1):
+    def __init__(self, init_bots=1, init_observer=1, logfile='log.txt'):
         
+        self.logfilename = logfile
+
         # List of bots
         self.bots = []
         if init_bots:
@@ -33,7 +35,8 @@ class main:
         # This is independent of the observations made by each bot
         # Each bot is responsible for observing the response to its own tweets
         self.observation_time = []
-        self.generate_observation_time( (11,15,0), (11,20,0), 6 )
+        self.generate_observation_time( (0,30,0), (23,30,0), 23 )
+        # self.generate_observation_time( (19,25,0), (19,30,0), 5 )
         
         # Map from ID of follower F_i of bot --> list L consisting of all the friends of
         # that F_i (i.e. everyone followed by F_i), including the bot itself
@@ -62,7 +65,29 @@ class main:
         # post times are random, rather than queried from the algorithm 
         # in stages. 
         self.map_bot_action_time = { idx:[] for idx in range(0,4+1)}
-    
+
+    def write_headers(self):
+        """
+        Writes headers of records_*.csv log file
+
+        Note that retweets_*.csv, likers_*.csv and tracker_day*.csv
+        do not have headers because the number of columns is dynamic
+        """
+        for bot_id in range(0,4+1):
+            f = open( "records_%d.csv" % bot_id, 'a' )
+            f.write("tweet_id_str,time,num_like,num_retweet,num_follower\n")
+            f.close()
+
+    def delete_all_tweets(self, all=1, bot_id=0):
+        """
+        Deletes tweets by bots
+        """
+        for id in range(0,4+1):
+            if all or (all == 0 and id == bot_id):
+                timeline = self.bots[id].get_timeline("ml%d_gt" % (id+1), n=100)
+                for tweet in timeline:
+                    self.bots[id].api.destroy_status(tweet.id)
+
         
     def populate_source(self, filename):
         f = open(filename, 'r')
@@ -138,7 +163,8 @@ class main:
         """
         done = 0
         num = len(source_timeline)
-        list_first_person = ["we've", "we", "we'll", "our", "me", "my"]
+        list_first_person = ["we've", "we", "we'll", "our", "me", "my", 
+                             "us", "i", "i'll", "you"]
         
         # Binary list, element L_i indicates whether tweet_i has been checked
         list_checked = [0 for idx in range(0,num)]
@@ -146,11 +172,11 @@ class main:
             idx_tweet = random.randrange(0, num)
             list_checked[idx_tweet] = 1
             text = source_timeline[idx_tweet].text
-            text_lower = text.lower()
+            list_token = text.lower().split()
             violate = 0
             # Check for violation of the rule
             for word in list_first_person:
-                if word in text_lower:
+                if word in list_token:
                     violate = 1
                     break
             if violate == 0:
@@ -198,21 +224,52 @@ class main:
         # Trim to character limit
         if len(text) > 140:
             text = text[:140]
+        # Before making new tweet, make note of the most recent tweet
+        tl = self.bots[bot_id].get_timeline(self.bots[bot_id].name, n=1)
+        if len(tl):
+            id_str_prev = tl[0].id_str
+        else:
+            id_str_prev = '0'
+        # Now make new tweet
         self.bots[bot_id].tweet(text)
+
+        # Log the time when bot made the tweet
+        time_of_tweet = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 
         # Wait for tweet to appear on twitter, then get the id_str that twitter
         # assigned to it
         time.sleep(5)
-        id_str_mine = self.bots[bot_id].get_timeline(self.bots[bot_id].name, n=1)[0].id_str
+        done = 0
+        t_start = time.time()
+        while not done:
+            # Hard cap of 10 seconds, resort to the most recent tweet
+            if ( time.time() - t_start > 10 ):
+                id_str_mine = id_str_prev
+                break
+            # Get most recent tweet
+            id_str_mine = self.bots[bot_id].get_timeline(self.bots[bot_id].name, n=1)[0].id_str
+            if id_str_mine != id_str_prev:
+                # Most recent tweet changed, meaning the new tweet was successful
+                done = 1
+            else:
+                # Wait a little more for the new tweet to appear
+                time.sleep(1)
         
+        f = open(self.logfilename, "a")
+        f.write("Bot %d\n" % bot_id)
+        f.write("%s : %s\n" % (source_name, text.encode('utf8')))
+        f.close()
+
         if verbose:
             print "Bot %d" % bot_id
             print "%s : %s" % (source_name, text)
     
         # Update memory with new tweet
         self.all_tweet[bot_id].append(id_str_mine)
-        self.map_bot_tweet_prev[bot_id].put(id_str_mine)
-        
+        # self.map_bot_tweet_prev[bot_id].put(id_str_mine)
+        # Store tweet_id and time of tweet into the queue of actions that still
+        # require recording of response
+        self.map_bot_tweet_prev[bot_id].put([id_str_mine, time_of_tweet])
         return id_str_mine
         
     
@@ -227,7 +284,10 @@ class main:
     def record(self, bot_id):
         
         # Extract the id_str of the last tweet of this bot from the queue
-        tweet_id_str = self.map_bot_tweet_prev[bot_id].get()
+        # tweet_id_str = self.map_bot_tweet_prev[bot_id].get()
+        pair = self.map_bot_tweet_prev[bot_id].get()
+        tweet_id_str = pair[0]
+        tweet_time = pair[1]
         
         # Number of likes, retweets, followers
         # Format of records.csv is
@@ -236,7 +296,10 @@ class main:
         self.bots[bot_id].update_followers()
         f = open( "records_%d.csv" % bot_id, 'a' )
         
-        f.write("%s,%d,%d,%d\n" % (tweet_id_str, num_like_prev, 
+#        f.write("%s,%d,%d,%d\n" % (tweet_id_str, num_like_prev, 
+#                                 num_retweet_prev, 
+#                                 self.bots[bot_id].num_followers))
+        f.write("%s,%s,%d,%d,%d\n" % (tweet_id_str, tweet_time, num_like_prev, 
                                  num_retweet_prev, 
                                  self.bots[bot_id].num_followers))
         f.close()
@@ -288,9 +351,12 @@ class main:
         if (delta <= 0):
             return
         
+        f = open(self.logfilename, "a")
+
         # Generate list for each bot
         for bot_id in range(0, 4+1):
-        
+            f.write("Bot %d tweet times\n" % bot_id)
+
             # Initialize list
             list_time = [0 for idx in range(0, N)]        
         
@@ -300,12 +366,15 @@ class main:
                 minute, second = divmod(t_random_sec, 60)
                 hour, minute = divmod(minute, 60)
                 list_time[idx] = (hour, minute, second)
+                f.write("%d,%d,%d\n" % (hour, minute, second))
 
             # Sort into chronological order and store into map   
             list_time.sort()
             print "Bot %d" % bot_id
             print list_time
-            self.map_bot_action_time[bot_id] = list_time        
+            self.map_bot_action_time[bot_id] = list_time
+
+        f.close()
         
 
     def generate_observation_time(self, t_start, t_end, N):
@@ -328,21 +397,27 @@ class main:
         if (delta <= 0):
             return
 
+        f = open(self.logfilename, 'a')
+        f.write("Generating observation times\n")
+
         # Generate N random times in seconds
         for idx in range(0, N+1):
             t_sec = t_start_sec + idx*delta
             minute, second = divmod(t_sec, 60)
             hour, minute = divmod(minute, 60)
+            f.write("%d,%d,%d\n" % (hour, minute, second))
             print (hour, minute, second)
             self.observation_time.append( (hour, minute, second) )
+
+        f.close()
 
 
     def get_wait_time(self):
         # Returns (hour, min), which specifies how long the bot should wait
         # after making a post before it measures the response
 
-        # Placeholder of 2 hours 0 minutes and 0 seconds
-        return (0,5,0)
+        # Placeholder of 1 hours 0 minutes and 0 seconds
+        return (1,0,0)
 
 #    def calc_observation_time(self, map_bot_action_seq):
 #        """
@@ -387,7 +462,32 @@ class main:
 #
 #        return to_return
                 
-                
+    def is_after_now(self, now, time_tuple):
+        """
+        Tests whether the given time_tuple occurs after now
+        Argument:
+        now - datetime object
+        time_tuple - tuple in the form (hour, minute, second)
+
+        Return
+        boolean
+        """
+        if (now.hour < time_tuple[0]):
+            return 1
+        elif (now.hour == time_tuple[0]):
+            if (now.minute < time_tuple[1]):
+                return 1
+            elif (now.minute == time_tuple[1]):
+                if (now.second <= time_tuple[2]):
+                    return 1
+                else:
+                    return 0
+            else:
+                return 0
+        else:
+            return 0
+
+
     def run(self, total_day):
         """
         Main program that schedules and executes all events for the entire
@@ -397,6 +497,8 @@ class main:
         1. total_day - total number of days to run the system
         """        
         
+        self.write_headers()
+
         # Time to wait between making tweet and observing response
         wait_time = self.get_wait_time()        
         
@@ -411,12 +513,15 @@ class main:
         while num_day < total_day:
         
             num_day += 1
+            f = open(self.logfilename, "a")
+            f.write("Day %d\n" % num_day)
             print "Day %d" % num_day
         
             # At start of this day, update the set of people to track
             self.observer.update_tracking( ['ml%d_gt' % idx for idx in range(1,5+1)] )
-            list_to_track = list(self.observer.tracking)
-            list_to_track.sort()
+            for follower_id in self.observer.tracking:
+                if follower_id not in list_to_track:
+                    list_to_track.append(follower_id)
         
             # Store the last tweet made by each follower of the bots
             map_follower_lasttweet = {}
@@ -431,12 +536,14 @@ class main:
                     map_follower_lasttweet[follower_id_str] = ''
             s += "\n"
             f.write(s)
-            f.close()        
+            f.close()
+
+            now = datetime.datetime.now()
         
             # At the start of each day, generate the entire set of action times
             # for all bots
-#            self.generate_post_time_random( (8,0,0), (22,0,0), 3 ) here
-            self.generate_post_time_random( (11,15,0), (11,20,0), 1 )
+            self.generate_post_time_random( (8,0,0), (22,30,0), 3 )
+#            self.generate_post_time_random( (19,25,0), (19,30,0), 1 )
 
             # NOTE: this method of putting action events into the queue all at once is only
             # correct for the version of the system that does not use the algorithm
@@ -447,14 +554,15 @@ class main:
             for bot_id in range(0, 4+1):
                 list_time = self.map_bot_action_time[bot_id]
                 for t_action in list_time:
-                    self.event_queue.put( (t_action, bot_id, 'a') )
+                    if self.is_after_now( now, t_action ):
+                        self.event_queue.put( (t_action, bot_id, 'a') )
         
             # Insert main observation events into the queue
             # The main observation bot has ID=5 (IDs start from 0)
+
             for idx in range(0, len(self.observation_time)):
-                self.event_queue.put( (self.observation_time[idx], 5, 'o_main') )
-        
-            print self.event_queue.qsize()   
+                if self.is_after_now( now, self.observation_time[idx] ):
+                    self.event_queue.put((self.observation_time[idx], 5, 'o_main'))
         
             # While there are remaining events for this day
             while self.event_queue.qsize():
@@ -481,7 +589,7 @@ class main:
                 # If event is an action by bot
                 if event_type == 'a':
                     bot_tweet_id_str = self.act(event_bot, attribute=0, verbose=1)
-                    self.record_last_tweet(event_bot, bot_tweet_id_str)
+                    # self.record_last_tweet(event_bot, bot_tweet_id_str)
                     
                     # Merely using the addition function of the datetime package
                     # to get the hour,minute,second of time to observe the response
@@ -538,3 +646,4 @@ class main:
 if __name__ == "__main__":
     
     exp = main(init_bots=1, init_observer=1)
+    # test comment
