@@ -143,12 +143,6 @@ class main:
         return self.bots[bot_id].get_likers(tweet_id_str)
         
     
-    def observe_follower_friend(self):
-        for follower_id in self.bot.followers:
-            list_friend_id = self.bot.get_friends(userid=follower_id)
-            self.map_follower_friend[follower_id] = list_friend_id
-
-    
     def choose_tweet(self, source_timeline):
         """
         Additional processing of the raw text copied from the source's timeline
@@ -296,9 +290,6 @@ class main:
         self.bots[bot_id].update_followers()
         f = open( "records_%d.csv" % bot_id, 'a' )
         
-#        f.write("%s,%d,%d,%d\n" % (tweet_id_str, num_like_prev, 
-#                                 num_retweet_prev, 
-#                                 self.bots[bot_id].num_followers))
         f.write("%s,%s,%d,%d,%d\n" % (tweet_id_str, tweet_time, num_like_prev, 
                                  num_retweet_prev, 
                                  self.bots[bot_id].num_followers))
@@ -488,7 +479,46 @@ class main:
             return 0
 
 
-    def run(self, total_day):
+    def record_second_order(self, list_followers, day):
+        """
+        Run once per day. Creates the connection matrix A for the set of followers
+        of the bot.
+        A_ij = 1 iff follower_i follows follower_j
+        Stores results in matrix_day*.csv
+        """
+        
+        # Create dictionary for efficiency
+        map_id_index = {}
+        count = len(list_followers)
+        for index in range(0, count):
+            map_id_index[ list_followers[index] ] = index
+
+        f = open("matrix_day%d.csv" % day, "a")
+        # Write header
+        s = ","
+        for id_str in list_followers:
+            s += "%s," % id_str
+        s += "\n"
+        f.write(s)
+
+        # Write rows of matrix
+        for id_str in list_followers:
+            # Get friends of this person
+            list_friend = self.observer.get_friends(id_str)
+            # Create row A_i, where A_ij = 1 iff the person with
+            # id_str follows the person at column index j
+            temp = [0 for x in range(0, count)]
+            for friend_id in list_friend:
+                if friend_id in map_id_index:
+                    temp[ map_id_index[friend_id] ] = 1
+            s = ','.join(map(str, temp))
+            s = id_str + ',' + s + '\n'
+            f.write(s)
+
+        f.close()
+
+
+    def run(self, total_day, header=0):
         """
         Main program that schedules and executes all events for the entire
         duration of the experiment
@@ -497,7 +527,8 @@ class main:
         1. total_day - total number of days to run the system
         """        
         
-        self.write_headers()
+        if header:
+            self.write_headers()
 
         # Time to wait between making tweet and observing response
         wait_time = self.get_wait_time()        
@@ -522,6 +553,8 @@ class main:
             for follower_id in self.observer.tracking:
                 if follower_id not in list_to_track:
                     list_to_track.append(follower_id)
+
+            self.record_second_order(list_to_track, num_day)
         
             # Store the last tweet made by each follower of the bots
             map_follower_lasttweet = {}

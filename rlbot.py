@@ -54,8 +54,10 @@ class rlbot:
         # List of the most recent tweets by this bot,
         # indexed from most recent to earliest
         self.tweets = self.get_timeline()
+        # User object
+        self.user = self.api.get_user(self.name)
         # User ID of bot
-        self.id_str = self.api.get_user(name).id_str        
+        self.id_str = self.user.id_str
         # Reset API request limits again, after the previous two commands
         self.update_limits()
         
@@ -237,8 +239,19 @@ class rlbot:
             
 
     def update_followers(self):
-        self.followers = self.get_followers()
-        self.num_followers = len(self.followers)        
+        # self.followers = self.get_followers()
+        done = 0
+        while done == 0:
+            if ( self.remaining['user'] != 0 ):
+                try:
+                    self.user = self.api.get_user(self.name)
+                    self.remaining['user'] -= 1
+                    self.num_followers = self.user.followers_count
+                    done = 1
+                except tweepy.TweepError:
+                    pass
+            else:
+                self.wait_limit_reset('user')
 
             
     def get_friends(self, userid=None, verbose=0):
