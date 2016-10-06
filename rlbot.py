@@ -577,7 +577,9 @@ class rlbot:
             unique_ids = list(set([re.findall(r'\d+', match)[0] for match in found_ids]))
             return unique_ids
         except urllib2.HTTPError:   
-            return False
+            return []
+        except:
+            return []
 
 
     def get_retweets(self, tweet_list, verbose=0):

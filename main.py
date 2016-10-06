@@ -542,6 +542,32 @@ class main:
                 s = "%s,%s,%s,%d,%d\n" % (tweet.id_str, creation_time, text_mod, tweet.favorite_count, tweet.retweet_count)
                 f.write(s.encode('utf8'))
             f.close()
+
+            list_tweet_id = [tweet.id_str for tweet in tweets]
+            
+            # Write to likers_*.csv
+            f = open("likers_%s.csv" % follower_id, "a")
+            for tweet_id_str in list_tweet_id[::-1]:
+                s = "%s," % tweet_id_str
+                list_liker = self.observer.get_likers(tweet_id_str)
+                s = s + ",".join(list_liker)
+                s += "\n"
+                f.write(s)
+            f.close()
+
+            map_tweet_retweeter = self.observer.get_retweets( list_tweet_id )
+            f = open("retweeters_%s.csv" % follower_id, "a")
+            # Write to retweeters_*.csv
+            for tweet_id_str in list_tweet_id[::-1]:
+                s = "%s," % tweet_id_str
+                list_retweeter_info = map_tweet_retweeter[tweet_id_str]
+                for retweeter in list_retweeter_info:
+                    retweeter_id_str = retweeter[0]
+                    retweeter_datetime = retweeter[1].strftime('%Y-%m-%d-%H-%M-%S')
+                    s += "%s,%s," % (retweeter_id_str, retweeter_datetime)
+                s += "\n"
+                f.write(s)
+            f.close()
             
 
     def run(self, total_day, header=0):
