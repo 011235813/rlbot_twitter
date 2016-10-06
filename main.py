@@ -391,13 +391,12 @@ class main:
         f = open(self.logfilename, 'a')
         f.write("Generating observation times\n")
 
-        # Generate N random times in seconds
         for idx in range(0, N+1):
             t_sec = t_start_sec + idx*delta
             minute, second = divmod(t_sec, 60)
             hour, minute = divmod(minute, 60)
             f.write("%d,%d,%d\n" % (hour, minute, second))
-            print (hour, minute, second)
+            # print (hour, minute, second)
             self.observation_time.append( (hour, minute, second) )
 
         f.close()
@@ -518,6 +517,33 @@ class main:
         f.close()
 
 
+    def observe_follower_detail(self, list_to_track, map_follower_lasttweet_day):
+        """
+        This function is called only at the end of a day, after event_queue has been emptied
+        For each follower, append to three files:
+        1. records_*.csv - tweet_id, time created, num likes, num retweets, num followers
+        2. likers_*.csv - tweet_id, liker_1_id, ... , liker_n_id
+        3. retweeters_*.csv - tweet_id, retweeter_1_id, time_1, ... , retweeter_n_id, time_n
+
+        Argument
+        1. list_to_track - the list of followers (refreshed at start of every day)
+        2. map_follower_lasttweet_day - map from follower_id_str to id_str of the most recent post
+        as recorded at the start of the day
+        """
+        for follower_id in list_to_track:
+            last_tweet = map_follower_lasttweet_day[follower_id]
+            tweets = self.observer.get_timeline_since(follower_id, since=last_tweet)
+
+            # Write to records_*.csv
+            f = open("records_%s.csv" % follower_id, "a")
+            for tweet in tweets[::-1]:
+                creation_time = tweet.created_at.strftime('%Y-%m-%d %H:%M:%S')
+                text_mod = tweet.text.replace("\n", " ")
+                s = "%s,%s,%s,%d,%d\n" % (tweet.id_str, creation_time, text_mod, tweet.favorite_count, tweet.retweet_count)
+                f.write(s.encode('utf8'))
+            f.close()
+            
+
     def run(self, total_day, header=0):
         """
         Main program that schedules and executes all events for the entire
@@ -536,9 +562,9 @@ class main:
         num_day = 0
         
         # Update the set of people to track
-        self.observer.update_tracking( ['ml%d_gt' % idx for idx in range(1,5+1)] )
-        list_to_track = list(self.observer.tracking)
-        list_to_track.sort()
+#        self.observer.update_tracking( ['ml%d_gt' % idx for idx in range(1,5+1)] )
+#        list_to_track = list(self.observer.tracking)
+#        list_to_track.sort()
 
         # Each iteration of this loop is a day
         while num_day < total_day:
@@ -550,14 +576,24 @@ class main:
         
             # At start of this day, update the set of people to track
             self.observer.update_tracking( ['ml%d_gt' % idx for idx in range(1,5+1)] )
-            for follower_id in self.observer.tracking:
-                if follower_id not in list_to_track:
-                    list_to_track.append(follower_id)
+            list_to_track = list(self.observer.tracking)
+            list_to_track.sort()
+#            for follower_id in self.observer.tracking:
+#                if follower_id not in list_to_track:
+#                    list_to_track.append(follower_id)
 
             self.record_second_order(list_to_track, num_day)
         
-            # Store the last tweet made by each follower of the bots
+            # Map from follower_id_str --> id_str of of the last post by that follower
+            # This map will be updated at every main observation event.
+            # Enables recording of number of posts by follower in 1 hour intervals
             map_follower_lasttweet = {}
+            # Another map from follower_id_str --> id_str of last post
+            # This map DOES NOT get updated every hour.
+            # It will be used at the end of the day to get all new posts that the follower
+            # made during this day
+            map_follower_lasttweet_day = {}
+            # Write header for tracker_day*.csv
             f = open("tracker_day%d.csv" % num_day, 'a')
             s = "Time,"
             for follower_id_str in list_to_track:
@@ -565,8 +601,10 @@ class main:
                 tweet_list = self.observer.get_timeline(follower_id_str, n=1, verbose=0)
                 if len(tweet_list) != 0:
                     map_follower_lasttweet[follower_id_str] = tweet_list[0].id_str
+                    map_follower_lasttweet_day[follower_id_str] = tweet_list[0].id_str
                 else:
                     map_follower_lasttweet[follower_id_str] = ''
+                    map_follower_lasttweet_day[follower_id_str] = ''                    
             s += "\n"
             f.write(s)
             f.close()
@@ -648,7 +686,7 @@ class main:
 #                                                  initial=0)
 #                    self.event_queue.put( (t_action, event_bot, 'a') )
                 elif event_type == 'o_main': 
-                    # main observation event (i.e. every hour)
+                    # Main observation event (i.e. every hour)
                     f = open("tracker_day%d.csv" % num_day, 'a')
                     # Write time
                     f.write("%d-%d-%d," % (event_time[0], event_time[1], event_time[2]))
@@ -661,13 +699,14 @@ class main:
                         else:
                             tweet_list = self.observer.get_timeline(follower_id_str, verbose=0)
                         if len(tweet_list) != 0:
+                            # Update to the new most recent tweet
                             map_follower_lasttweet[follower_id_str] = tweet_list[0].id_str
-                        
-
                         f.write("%d," % len(tweet_list))
                     f.write("\n")
                         
-            
+            # Record follower details
+            self.observe_follower_detail(list_to_track, map_follower_lasttweet_day)
+                    
             # Sleep until 00:00:10 of next day
             current_time = datetime.datetime.now()
             sec_until_tomorrow = 24*3600 - (current_time.hour*3600 + current_time.minute*60 \
