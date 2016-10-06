@@ -199,15 +199,31 @@ class rlbot:
 
     def wait_limit_reset(self, choice=""):
         """
+        Entered this function only because self.remaining[choice] == 0
         Gets the time when the chosen API limit will reset, then sleeps
         until that time, plus some margin
         """
-        current_time = time.time()
-        limits = self.api.rate_limit_status()
-        reset_time = self.get_resettime(limits, choice)
-        if ( reset_time > current_time ):
-            time.sleep(reset_time - current_time + self.margin)
-        self.update_limits()         
+        done = 0
+        while done == 0:
+            try:
+                # In case self.remaining[choice] and actual limits are not synced
+                limits = self.api.rate_limit_status()
+                limit_actual = self.get_limits(limits, choice)
+                if limit_actual != 0:
+                    self.remaining[choice] = limit_actual
+                else:
+                    current_time = time.time()
+                    limits = self.api.rate_limit_status()
+                    reset_time = self.get_resettime(limits, choice)
+                    if ( reset_time > current_time ):
+                        time.sleep(reset_time - current_time + self.margin)
+                        self.update_limits()
+                return
+            except tweepy.TweepError:
+                # Somehow api.rate_limit_status() itself reached the rate limit, so wait
+                # and try again
+                time.sleep(60)
+
 
 
     def get_followers(self, userid=None, verbose=0):
@@ -247,9 +263,9 @@ class rlbot:
                     self.user = self.api.get_user(self.name)
                     self.remaining['user'] -= 1
                     self.num_followers = self.user.followers_count
-                    done = 1
                 except tweepy.TweepError:
                     pass
+                done = 1
             else:
                 self.wait_limit_reset('user')
 
