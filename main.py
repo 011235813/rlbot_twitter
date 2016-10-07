@@ -18,7 +18,7 @@ import Queue
 
 class main:
 
-    def __init__(self, init_bots=1, init_observer=1, logfile='log.txt'):
+    def __init__(self, init_bots=1, init_observer=1, logfile='/home/t3500/devdata/rlbot_data/log.txt'):
         
         self.logfilename = logfile
 
@@ -37,10 +37,6 @@ class main:
         self.observation_time = []
         self.generate_observation_time( (0,30,0), (23,30,0), 23 )
         # self.generate_observation_time( (19,25,0), (19,30,0), 5 )
-        
-        # Map from ID of follower F_i of bot --> list L consisting of all the friends of
-        # that F_i (i.e. everyone followed by F_i), including the bot itself
-        self.map_follower_friend = {}
 
         # Map from bot_id to Queue of tweet id_str by that bot
         # Each element in the queue is the id_str of a tweet made earlier, that 
@@ -74,7 +70,7 @@ class main:
         do not have headers because the number of columns is dynamic
         """
         for bot_id in range(0,4+1):
-            f = open( "records_%d.csv" % bot_id, 'a' )
+            f = open( "/home/t3500/devdata/rlbot_data/records_%d.csv" % bot_id, 'a' )
             f.write("tweet_id_str,time,num_like,num_retweet,num_follower\n")
             f.close()
 
@@ -184,6 +180,21 @@ class main:
                     # then just return the text
                     return text
 
+
+    def process_tweet(self, input_text):
+        """
+        Fix links, formatting, extraneous substrings, etc.
+        """
+
+        # If the post was a retweet, then the raw text 
+        # will have format "RT @someone: <The actual text>"
+        # Therefore, remove everything before the actual text
+        if ("RT " in input_text):
+            idx = input_text.index(":")
+            mod_text = input_text[idx+2:]
+
+        return mod_text
+
     
     # Bot's action    
     def act(self, bot_id, attribute=0, verbose=0):
@@ -212,6 +223,8 @@ class main:
 
         # Randomly select a tweet
         text = self.choose_tweet(source_timeline)
+        # Additional text processing
+        text = self.process_tweet(text)
         if attribute:
             text = "From %s: %s" % (source_name, text)
 
@@ -269,7 +282,7 @@ class main:
     
     def record_last_tweet(self, bot_id, tweet_id_str):
         current_time = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-        f = open( "tweet_%d.txt" % bot_id, "a" )
+        f = open( "/home/t3500/devdata/rlbot_data/tweet_%d.txt" % bot_id, "a" )
         f.write("%s,%s" % (tweet_id_str, current_time))
         f.write("\n")
         f.close()
@@ -288,7 +301,7 @@ class main:
         # id_str of previous tweet, # likes, # retweets, # followers
         num_like_prev, num_retweet_prev = self.observe_num_like_retweet(bot_id, tweet_id_str)
         self.bots[bot_id].update_followers()
-        f = open( "records_%d.csv" % bot_id, 'a' )
+        f = open( "/home/t3500/devdata/rlbot_data/records_%d.csv" % bot_id, 'a' )
         
         f.write("%s,%s,%d,%d,%d\n" % (tweet_id_str, tweet_time, num_like_prev, 
                                  num_retweet_prev, 
@@ -305,7 +318,7 @@ class main:
             retweeter_datetime = retweeter[1].strftime('%Y-%m-%d-%H-%M-%S')
             s += "%s,%s," % (retweeter_id_str, retweeter_datetime)
         s += "\n"
-        f = open( "retweeters_%d.csv" % bot_id, 'a' )        
+        f = open( "/home/t3500/devdata/rlbot_data/retweeters_%d.csv" % bot_id, 'a' )        
         f.write(s)
         f.close()
         
@@ -317,7 +330,7 @@ class main:
         for liker_id_str in list_liker:
             s += "%s," % liker_id_str
         s += "\n"
-        f = open( "likers_%d.csv" % bot_id, 'a' )            
+        f = open( "/home/t3500/devdata/rlbot_data/likers_%d.csv" % bot_id, 'a' )            
         f.write(s)            
         f.close()
 
@@ -492,7 +505,7 @@ class main:
         for index in range(0, count):
             map_id_index[ list_followers[index] ] = index
 
-        f = open("matrix_day%d.csv" % day, "a")
+        f = open("/home/t3500/devdata/rlbot_data/matrix_day%d.csv" % day, "a")
         # Write header
         s = ","
         for id_str in list_followers:
@@ -535,7 +548,7 @@ class main:
             tweets = self.observer.get_timeline_since(follower_id, since=last_tweet)
 
             # Write to records_*.csv
-            f = open("records_%s.csv" % follower_id, "a")
+            f = open("/home/t3500/devdata/rlbot_data/records_%s.csv" % follower_id, "a")
             for tweet in tweets[::-1]:
                 creation_time = tweet.created_at.strftime('%Y-%m-%d %H:%M:%S')
                 text_mod = tweet.text.replace("\n", " ")
@@ -546,7 +559,7 @@ class main:
             list_tweet_id = [tweet.id_str for tweet in tweets]
             
             # Write to likers_*.csv
-            f = open("likers_%s.csv" % follower_id, "a")
+            f = open("/home/t3500/devdata/rlbot_data/likers_%s.csv" % follower_id, "a")
             for tweet_id_str in list_tweet_id[::-1]:
                 s = "%s," % tweet_id_str
                 list_liker = self.observer.get_likers(tweet_id_str)
@@ -556,7 +569,7 @@ class main:
             f.close()
 
             map_tweet_retweeter = self.observer.get_retweets( list_tweet_id )
-            f = open("retweeters_%s.csv" % follower_id, "a")
+            f = open("/home/t3500/devdata/rlbot_data/retweeters_%s.csv" % follower_id, "a")
             # Write to retweeters_*.csv
             for tweet_id_str in list_tweet_id[::-1]:
                 s = "%s," % tweet_id_str
@@ -620,7 +633,7 @@ class main:
             # made during this day
             map_follower_lasttweet_day = {}
             # Write header for tracker_day*.csv
-            f = open("tracker_day%d.csv" % num_day, 'a')
+            f = open("/home/t3500/devdata/rlbot_data/tracker_day%d.csv" % num_day, 'a')
             s = "Time,"
             for follower_id_str in list_to_track:
                 s += "%s," % follower_id_str
@@ -639,7 +652,7 @@ class main:
         
             # At the start of each day, generate the entire set of action times
             # for all bots
-            self.generate_post_time_random( (8,0,0), (22,30,0), 3 )
+            self.generate_post_time_random( (8,0,0), (22,30,0), 2 )
 #            self.generate_post_time_random( (19,25,0), (19,30,0), 1 )
 
             # NOTE: this method of putting action events into the queue all at once is only
@@ -713,7 +726,7 @@ class main:
 #                    self.event_queue.put( (t_action, event_bot, 'a') )
                 elif event_type == 'o_main': 
                     # Main observation event (i.e. every hour)
-                    f = open("tracker_day%d.csv" % num_day, 'a')
+                    f = open("/home/t3500/devdata/rlbot_data/tracker_day%d.csv" % num_day, 'a')
                     # Write time
                     f.write("%d-%d-%d," % (event_time[0], event_time[1], event_time[2]))
                     for follower_id_str in list_to_track:
