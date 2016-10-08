@@ -191,9 +191,9 @@ class main:
         # Therefore, remove everything before the actual text
         if ("RT " in input_text):
             idx = input_text.index(":")
-            mod_text = input_text[idx+2:]
-
-        return mod_text
+            return input_text[idx+2:]
+        else:
+            return input_text
 
     
     # Bot's action    
