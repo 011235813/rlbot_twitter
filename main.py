@@ -12,6 +12,7 @@ import random
 import datetime
 from operator import itemgetter
 import Queue
+import os
 
 # Import reinforcement learning algorithm
 # import algorithm
@@ -106,8 +107,6 @@ class main:
         # In this case we're only interested in the response to a single previous
         # tweet, so the input list only has one element
         like_list, retweet_list = self.bots[bot_id].get_num_like_retweet( [tweet_id_str] )
-#        self.num_like_prev[bot_id] = sum(like_list)
-#        self.num_retweet_prev[bot_id] = sum(retweet_list)
         return sum(like_list), sum(retweet_list)
     
     
@@ -273,7 +272,6 @@ class main:
     
         # Update memory with new tweet
         self.all_tweet[bot_id].append(id_str_mine)
-        # self.map_bot_tweet_prev[bot_id].put(id_str_mine)
         # Store tweet_id and time of tweet into the queue of actions that still
         # require recording of response
         self.map_bot_tweet_prev[bot_id].put([id_str_mine, time_of_tweet])
@@ -291,7 +289,6 @@ class main:
     def record(self, bot_id):
         
         # Extract the id_str of the last tweet of this bot from the queue
-        # tweet_id_str = self.map_bot_tweet_prev[bot_id].get()
         pair = self.map_bot_tweet_prev[bot_id].get()
         tweet_id_str = pair[0]
         tweet_time = pair[1]
@@ -302,7 +299,6 @@ class main:
         num_like_prev, num_retweet_prev = self.observe_num_like_retweet(bot_id, tweet_id_str)
         self.bots[bot_id].update_followers()
         f = open( "/home/t3500/devdata/rlbot_data/records_%d.csv" % bot_id, 'a' )
-        
         f.write("%s,%s,%d,%d,%d\n" % (tweet_id_str, tweet_time, num_like_prev, 
                                  num_retweet_prev, 
                                  self.bots[bot_id].num_followers))
@@ -491,7 +487,7 @@ class main:
             return 0
 
 
-    def record_second_order(self, list_followers, day):
+    def record_network(self, list_followers, day):
         """
         Run once per day. Creates the connection matrix A for the set of followers
         of the bot.
@@ -545,13 +541,21 @@ class main:
         """
         for follower_id in list_to_track:
             last_tweet = map_follower_lasttweet_day[follower_id]
-            tweets = self.observer.get_timeline_since(follower_id, since=last_tweet)
+            if last_tweet != '':
+                tweets = self.observer.get_timeline_since(follower_id, since=last_tweet)
+            else:
+                tweets = self.observer.get_timeline(follower_id, verbose=0)            
 
             # Write to records_*.csv
-            f = open("/home/t3500/devdata/rlbot_data/records_%s.csv" % follower_id, "a")
+            path_to_file = "/home/t3500/devdata/rlbot_data/records_%s.csv" % follower_id
+            if os.path.isfile(path_to_file):
+                f = open(path_to_file, "a")
+            else: # if file did not exist previously, write header
+                f = open(path_to_file, "a")
+                f.write("tweet_id_str,time,text,num_like,num_retweet\n")
             for tweet in tweets[::-1]:
                 creation_time = tweet.created_at.strftime('%Y-%m-%d %H:%M:%S')
-                text_mod = tweet.text.replace("\n", " ")
+                text_mod = tweet.text.replace("\n", " ") # remove newlines
                 s = "%s,%s,%s,%d,%d\n" % (tweet.id_str, creation_time, text_mod, tweet.favorite_count, tweet.retweet_count)
                 f.write(s.encode('utf8'))
             f.close()
@@ -583,13 +587,17 @@ class main:
             f.close()
             
 
-    def run(self, total_day, header=0):
+    def run(self, total_day, start_day_num=0, header=0):
         """
         Main program that schedules and executes all events for the entire
         duration of the experiment
         
         Argument:
         1. total_day - total number of days to run the system
+        2. start_day_num - 0 if running the program from day 0 (ensure that log folder
+        is cleared), nonzero if need to restart the program after any number of days 
+        has already elapsed.
+        3. header - 1 to write headers in records_*.csv
         """        
         
         if header:
@@ -598,12 +606,7 @@ class main:
         # Time to wait between making tweet and observing response
         wait_time = self.get_wait_time()        
         
-        num_day = 0
-        
-        # Update the set of people to track
-#        self.observer.update_tracking( ['ml%d_gt' % idx for idx in range(1,5+1)] )
-#        list_to_track = list(self.observer.tracking)
-#        list_to_track.sort()
+        num_day = start_day_num
 
         # Each iteration of this loop is a day
         while num_day < total_day:
@@ -617,11 +620,6 @@ class main:
             self.observer.update_tracking( ['ml%d_gt' % idx for idx in range(1,5+1)] )
             list_to_track = list(self.observer.tracking)
             list_to_track.sort()
-#            for follower_id in self.observer.tracking:
-#                if follower_id not in list_to_track:
-#                    list_to_track.append(follower_id)
-
-            self.record_second_order(list_to_track, num_day)
         
             # Map from follower_id_str --> id_str of of the last post by that follower
             # This map will be updated at every main observation event.
@@ -742,6 +740,9 @@ class main:
                             map_follower_lasttweet[follower_id_str] = tweet_list[0].id_str
                         f.write("%d," % len(tweet_list))
                     f.write("\n")
+
+            # Record connectivity matrix
+            self.record_network(list_to_track, num_day)
                         
             # Record follower details
             self.observe_follower_detail(list_to_track, map_follower_lasttweet_day)
@@ -757,4 +758,3 @@ class main:
 if __name__ == "__main__":
     
     exp = main(init_bots=1, init_observer=1)
-    # test comment

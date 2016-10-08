@@ -379,23 +379,25 @@ class rlbot:
                 try:
                     tweets = self.api.user_timeline(userid, count=200)
                     self.remaining['timeline'] -= 1
-                    tweet_list.extend(tweets)
-                    
-                    for idx in range(0, len(tweet_list)):
-                        # If found the tweet with id_str = since, return the
-                        # slice with higher indices
-                        if tweet_list[idx].id_str == since:
-                            found = 1
-                            return tweet_list[:idx]
-                    # starting point of next acquisition
-                    last = tweet_list[-1].id - 1
-                    done = 1
+                    if len(tweets) == 0:
+                        return tweet_list
+                    else:
+                        tweet_list.extend(tweets)
+                        for idx in range(0, len(tweet_list)):
+                            # If found the tweet with id_str = since, return the
+                            # slice with higher indices
+                            if tweet_list[idx].id_str == since:
+                                found = 1
+                                return tweet_list[:idx]
+                        # starting point of next acquisition
+                        last = tweet_list[-1].id - 1
+                        done = 1
                 except tweepy.TweepError:
                     return tweet_list
             else:
                 self.wait_limit_reset('timeline')
 
-        # While number of remaining tweets to get is not 0
+        # While not found, search further back in time starting from last
         while found == 0 and len(tweets) != 0:
             done = 0
             while done == 0:
@@ -404,15 +406,17 @@ class rlbot:
                         tweets = self.api.user_timeline(userid, count=200, 
                                                             max_id=last)
                         self.remaining['timeline'] -= 1
-                        idx_start = len(tweet_list)
-                        tweet_list.extend(tweets)
-                        
-                        for idx in range(idx_start, len(tweet_list)):
-                            if tweet_list[idx].id_str == since:
-                                found = 1
-                                return tweet_list[:idx]
-                        last = tweet_list[-1].id - 1
-                        done = 1
+                        if len(tweets) == 0: # no more to find, so return empty list
+                            return []
+                        else:
+                            idx_start = len(tweet_list)
+                            tweet_list.extend(tweets)
+                            for idx in range(idx_start, len(tweet_list)):
+                                if tweet_list[idx].id_str == since:
+                                    found = 1
+                                    return tweet_list[:idx]
+                            last = tweet_list[-1].id - 1
+                            done = 1
                     except tweepy.TweepError:
                         return tweet_list
                 else:
