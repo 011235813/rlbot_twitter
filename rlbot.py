@@ -743,6 +743,10 @@ class rlbot:
     def tweet(self, text):
         """
         Makes a tweet using the given text
+
+        Return
+        1 - if successful
+        0 - if encountered tweepy error
         """
         done = 0
         while done == 0:
@@ -751,6 +755,7 @@ class rlbot:
                     self.api.update_status(text)
                     self.remaining['update'] -= 1
                     done = 1
+                    return 1
                 except tweepy.TweepError as err:
                     print "Error in rlbot.tweet(): ", err
                     return 0

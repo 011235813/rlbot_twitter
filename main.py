@@ -169,7 +169,7 @@ class main:
             # If all sources have been exhausted without finding a suitable tweet
             if list_options_source == []:
                 done = 1
-                return ""
+                return "", ""
 
             # Randomly choose a source from remaining options
             idx_source = random.choice( list_options_source )
@@ -216,7 +216,7 @@ class main:
                         # If no violation was found, return this tweet
                         done_inner = 1
                         self.map_bot_already_tweeted[bot_id].append(tweet_id_str)
-                        return text
+                        return text, source_name
 
 
     def process_tweet(self, input_text):
@@ -253,7 +253,7 @@ class main:
         
         """
         
-        text = self.choose_tweet(bot_id)
+        text, source_name = self.choose_tweet(bot_id)
         
         # If could not find a suitable tweet, do not act
         if text == "":
@@ -644,7 +644,7 @@ class main:
         
             num_day += 1
             f = open(self.logfilename, "a")
-            f.write("Day %d\n" % num_day)
+            f.write("\nDay %d\n" % num_day)
             print "Day %d" % num_day
         
             # At start of this day, update the set of people to track
