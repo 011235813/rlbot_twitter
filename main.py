@@ -45,12 +45,17 @@ class main:
         self.map_bot_tweet_prev = { idx:Queue.Queue() for idx in range(0,4+1) }
         
         # Map bot_id --> list of id_str of all tweets that the bot has posted during lifetime
-        self.all_tweet = { idx:[] for idx in range(0,4+1) }
+        # self.all_tweet = { idx:[] for idx in range(0,4+1) }
 
         # List of screen_name of accounts whose tweets will be copied 
         # and tweeted by the bot
         self.list_source = []
         self.populate_source( 'source.txt' )
+        
+        # Map from bot_id to list of tweet_id_str, 
+        # which uniquely define the tweets that the bot has already made
+        # during the day. List is cleared at the end of every day
+        self.map_bot_already_tweeted = { bot_id:[] for bot_id in range(0,4+1) }
         
         # Priority queue whose elements are tuples (time_tuple, bot_id, event_type)
         # Shared among all bots (bot_0,...bot_4,bot_5) in order to correctly
@@ -138,7 +143,7 @@ class main:
         return self.bots[bot_id].get_likers(tweet_id_str)
         
     
-    def choose_tweet(self, source_timeline):
+    def choose_tweet(self, bot_id):
         """
         Additional processing of the raw text copied from the source's timeline
         From all the tweets in source_timeline, attempt to find a random tweet
@@ -151,33 +156,67 @@ class main:
         processed text string
         """
         done = 0
-        num = len(source_timeline)
-        list_first_person = ["we've", "we", "we'll", "our", "me", "my", 
-                             "us", "i", "i'll", "you"]
-        
-        # Binary list, element L_i indicates whether tweet_i has been checked
-        list_checked = [0 for idx in range(0,num)]
+        list_first_person = ["we", "we've", "we'll", "we're", "our", "me", 
+                             "my", "us", "i", "i'll", "you"]
+
+        # List of sources, each of which will get eliminated
+        # if all of its most recent 5 tweets are not suitable for posting
+        # by bot
+        list_options_source = range(0, len(self.list_source))
+
         while not done:
-            idx_tweet = random.randrange(0, num)
-            list_checked[idx_tweet] = 1
-            text = source_timeline[idx_tweet].text
-            list_token = text.lower().split()
-            violate = 0
-            # Check for violation of the rule
-            for word in list_first_person:
-                if word in list_token:
-                    violate = 1
-                    break
-            if violate == 0:
-                # If no violation was found, return this tweet
-                return text
-            else:
-                # Exists violation
-                if sum(list_checked) == num:
-                    # If all tweets in source_timeline have been checked
-                    # and still cannot find a tweet that passes the criteria,
-                    # then just return the text
-                    return text
+
+            # If all sources have been exhausted without finding a suitable tweet
+            if list_options_source == []:
+                done = 1
+                return ""
+
+            # Randomly choose a source from remaining options
+            idx_source = random.choice( list_options_source )
+            source_name = self.list_source[idx_source]
+            # Get the 5 most recent posts by the source
+            source_timeline = self.bots[bot_id].get_timeline(source_name, 5)
+    
+            num = len(source_timeline)
+            done_inner = 0
+            # List of potential tweets, each of which will get eliminated
+            # if it is not suitable for posting by the bot
+            list_options_timeline = range(0, num)
+
+            while not done_inner:
+    
+                # List of options is guaranteeed to decrease by 1 each iteration,
+                # so while loop will terminate once it is empty                
+                if list_options_timeline == []:
+                    done_inner = 1
+                    # This particular source has been exhausted
+                    list_options_source.remove(idx_source)
+                    continue
+
+                # Randomly choose a tweet from remaining options and remove
+                # this option
+                idx_tweet = random.choice( list_options_timeline )
+                list_options_timeline.remove(idx_tweet)
+
+                text = source_timeline[idx_tweet].text
+                tweet_id_str = source_timeline[idx_tweet].id_str
+
+                # Do not duplicate a post
+                if tweet_id_str in self.map_bot_already_tweeted[bot_id]:
+                    continue
+                else:
+                    list_token = text.lower().split()
+                    violate = 0
+                    # Check for violation of the first-person pronoun rule
+                    for word in list_first_person:
+                        if word in list_token:
+                            violate = 1
+                            break
+                    if violate == 0:
+                        # If no violation was found, return this tweet
+                        done_inner = 1
+                        self.map_bot_already_tweeted[bot_id].append(tweet_id_str)
+                        return text
 
 
     def process_tweet(self, input_text):
@@ -214,14 +253,12 @@ class main:
         
         """
         
-        idx_source = random.randrange(0, len(self.list_source))
-        source_name = self.list_source[idx_source]
+        text = self.choose_tweet(bot_id)
         
-        # Get the 5 most recent posts by the source
-        source_timeline = self.bots[bot_id].get_timeline(source_name, 5)
+        # If could not find a suitable tweet, do not act
+        if text == "":
+            return
 
-        # Randomly select a tweet
-        text = self.choose_tweet(source_timeline)
         # Additional text processing
         text = self.process_tweet(text)
         if attribute:
@@ -236,8 +273,12 @@ class main:
             id_str_prev = tl[0].id_str
         else:
             id_str_prev = '0'
+
         # Now make new tweet
-        self.bots[bot_id].tweet(text)
+        success = self.bots[bot_id].tweet(text)
+        # If tweet was unsuccessful, then skip over rest of function
+        if not success:
+            return
 
         # Log the time when bot made the tweet
         time_of_tweet = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
@@ -270,20 +311,10 @@ class main:
             print "Bot %d" % bot_id
             print "%s : %s" % (source_name, text)
     
-        # Update memory with new tweet
-        self.all_tweet[bot_id].append(id_str_mine)
         # Store tweet_id and time of tweet into the queue of actions that still
         # require recording of response
         self.map_bot_tweet_prev[bot_id].put([id_str_mine, time_of_tweet])
-        return id_str_mine
         
-    
-    def record_last_tweet(self, bot_id, tweet_id_str):
-        current_time = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-        f = open( "/home/t3500/devdata/rlbot_data/tweet_%d.txt" % bot_id, "a" )
-        f.write("%s,%s" % (tweet_id_str, current_time))
-        f.write("\n")
-        f.close()
        
     # Record the response to a previous action   
     def record(self, bot_id):
@@ -696,8 +727,7 @@ class main:
                     
                 # If event is an action by bot
                 if event_type == 'a':
-                    bot_tweet_id_str = self.act(event_bot, attribute=0, verbose=1)
-                    # self.record_last_tweet(event_bot, bot_tweet_id_str)
+                    self.act(event_bot, attribute=0, verbose=1)
                     
                     # Merely using the addition function of the datetime package
                     # to get the hour,minute,second of time to observe the response
@@ -746,6 +776,9 @@ class main:
                         
             # Record follower details
             self.observe_follower_detail(list_to_track, map_follower_lasttweet_day)
+
+            # Clear the list of tweets made by each bot during this day
+            self.map_bot_already_tweeted = { bot_id:[] for bot_id in range(0,4+1) }
                     
             # Sleep until 00:00:10 of next day
             current_time = datetime.datetime.now()

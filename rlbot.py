@@ -747,9 +747,13 @@ class rlbot:
         done = 0
         while done == 0:
             if self.remaining['update'] != 0:
-                self.api.update_status(text)
-                self.remaining['update'] -= 1
-                done = 1
+                try:
+                    self.api.update_status(text)
+                    self.remaining['update'] -= 1
+                    done = 1
+                except tweepy.TweepError as err:
+                    print "Error in rlbot.tweet(): ", err
+                    return 0
             else:
                 self.wait_limit_reset('update')
 
