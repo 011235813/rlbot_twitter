@@ -216,6 +216,11 @@ class main:
                         # If no violation was found, return this tweet
                         done_inner = 1
                         self.map_bot_already_tweeted[bot_id].append(tweet_id_str)
+                        if ( 'RT @' in text ): # If tweet is a retweet, get the original tweet
+                            try:
+                                text = source_timeline[idx_tweet].retweeted_status.text
+                            except:
+                                pass
                         return text, source_name
 
 
@@ -249,15 +254,14 @@ class main:
         3. verbose - if 1, prints the text of the bot's tweet to the console
         
         Return:
-        id_str of the tweet made by bot
-        
+        id_str of the tweet made by bot, or "" if unsuccessful
         """
         
         text, source_name = self.choose_tweet(bot_id)
         
         # If could not find a suitable tweet, do not act
         if text == "":
-            return
+            return ""
 
         # Additional text processing
         text = self.process_tweet(text)
@@ -278,7 +282,7 @@ class main:
         success = self.bots[bot_id].tweet(text)
         # If tweet was unsuccessful, then skip over rest of function
         if not success:
-            return
+            return ""
 
         # Log the time when bot made the tweet
         time_of_tweet = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
@@ -309,12 +313,13 @@ class main:
 
         if verbose:
             print "Bot %d" % bot_id
-            print "%s : %s" % (source_name, text)
+            print "%s : %s" % (source_name, text.encode('utf8'))
     
         # Store tweet_id and time of tweet into the queue of actions that still
         # require recording of response
         self.map_bot_tweet_prev[bot_id].put([id_str_mine, time_of_tweet])
-        
+        return id_str_mine
+    
        
     # Record the response to a previous action   
     def record(self, bot_id):
@@ -727,19 +732,19 @@ class main:
                     
                 # If event is an action by bot
                 if event_type == 'a':
-                    self.act(event_bot, attribute=0, verbose=1)
-                    
-                    # Merely using the addition function of the datetime package
-                    # to get the hour,minute,second of time to observe the response
-                    # to this action. The year, month and day do not matter
-                    datetime_action = datetime.datetime(2016,1,1,event_time[0],
-                                                        event_time[1],event_time[2])
-                    datetime_observe = datetime_action + datetime.timedelta(hours=wait_time[0], 
-                                                                            minutes=wait_time[1],
-                                                                            seconds=wait_time[2])
-                    t_observe = (datetime_observe.hour, datetime_observe.minute, datetime_observe.second)
-                    # Insert the observation event into the queue
-                    self.event_queue.put( (t_observe, event_bot, 'o') )
+                    id_str_mine = self.act(event_bot, attribute=0, verbose=1)
+                    if id_str_mine != "":
+                        # Merely using the addition function of the datetime package
+                        # to get the hour,minute,second of time to observe the response
+                        # to this action. The year, month and day do not matter
+                        datetime_action = datetime.datetime(2016,1,1,event_time[0],
+                                                            event_time[1],event_time[2])
+                        datetime_observe = datetime_action + datetime.timedelta(hours=wait_time[0], 
+                                                                                minutes=wait_time[1],
+                                                                                seconds=wait_time[2])
+                        t_observe = (datetime_observe.hour, datetime_observe.minute, datetime_observe.second)
+                        # Insert the observation event into the queue
+                        self.event_queue.put( (t_observe, event_bot, 'o') )
                 elif event_type == 'o': # If event is an observation of response
                     self.record(event_bot)
                     # Once the system incorporates the algorithm, then the
