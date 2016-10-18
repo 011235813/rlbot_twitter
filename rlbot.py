@@ -51,9 +51,7 @@ class rlbot:
         self.update_followers()
         # Set of id_str of people who are tracked by this bot
         self.tracking = set()
-        # List of the most recent tweets by this bot,
-        # indexed from most recent to earliest
-        self.tweets = self.get_timeline()
+
         # User object
         self.user = self.api.get_user(self.name)
         # User ID of bot
@@ -213,10 +211,12 @@ class rlbot:
                     self.remaining[choice] = limit_actual
                 else:
                     current_time = time.time()
-                    limits = self.api.rate_limit_status()
                     reset_time = self.get_resettime(limits, choice)
                     if ( reset_time > current_time ):
-                        time.sleep(reset_time - current_time + self.margin)
+                        t_delta = reset_time - current_time + self.margin
+                        print "Wait %d seconds for %s limit to reset" % \
+                            (t_delta, choice)
+                        time.sleep(t_delta)
                         self.update_limits()
                 return
             except tweepy.TweepError:
@@ -392,6 +392,9 @@ class rlbot:
                         # starting point of next acquisition
                         last = tweet_list[-1].id - 1
                         done = 1
+                except tweepy.RateLimitError:
+                    print "rlbot.get_timeline_since() rate limit error"
+                    self.wait_limit_reset('timeline')
                 except tweepy.TweepError:
                     return tweet_list
             else:
@@ -417,6 +420,9 @@ class rlbot:
                                     return tweet_list[:idx]
                             last = tweet_list[-1].id - 1
                             done = 1
+                    except tweepy.RateLimitError:
+                        print "rlbot.get_timeline_since() rate limit error"
+                        self.wait_limit_reset('timeline')
                     except tweepy.TweepError:
                         return tweet_list
                 else:
@@ -461,6 +467,9 @@ class rlbot:
                         # starting point of next acquisition                    
                         last = tweet_list[-1].id - 1
                     done = 1
+                except tweepy.RateLimitError:
+                    print "rlbot.get_timeline() rate limit error"
+                    self.wait_limit_reset('timeline')
                 except tweepy.TweepError:
                     return tweet_list
             else:
@@ -483,7 +492,10 @@ class rlbot:
                         self.remaining['timeline'] -= 1
                         tweet_list.extend(tweets)
                         last = tweet_list[-1].id - 1
-                        done = 1                      
+                        done = 1     
+                    except tweepy.RateLimitError:
+                        print "rlbot.get_timeline() rate limit error"
+                        self.wait_limit_reset('timeline')
                     except tweepy.TweepError:
                         return tweet_list
                 else:

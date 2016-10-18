@@ -22,6 +22,8 @@ class main:
     def __init__(self, init_bots=1, init_observer=1, logfile='/home/t3500/devdata/rlbot_data/log.txt'):
         
         self.logfilename = logfile
+        self.path = '/home/t3500/devdata/rlbot_data'
+#        self.path = '/home/jyang/Documents/rlbot_twitter'
 
         # List of bots
         self.bots = []
@@ -36,8 +38,7 @@ class main:
         # This is independent of the observations made by each bot
         # Each bot is responsible for observing the response to its own tweets
         self.observation_time = []
-        self.generate_observation_time( (0,30,0), (23,30,0), 23 )
-        # self.generate_observation_time( (19,25,0), (19,30,0), 5 )
+        # self.generate_observation_time( (0,30,0), (23,30,0), 23 )
 
         # Map from bot_id to Queue of tweet id_str by that bot
         # Each element in the queue is the id_str of a tweet made earlier, that 
@@ -76,7 +77,7 @@ class main:
         do not have headers because the number of columns is dynamic
         """
         for bot_id in range(0,4+1):
-            f = open( "/home/t3500/devdata/rlbot_data/records_%d.csv" % bot_id, 'a' )
+            f = open("%s/records_%d.csv" % (self.path, bot_id), "a")
             f.write("tweet_id_str,time,num_like,num_retweet,num_follower\n")
             f.close()
 
@@ -87,6 +88,13 @@ class main:
         for id in range(0,4+1):
             if all or (all == 0 and id == bot_id):
                 timeline = self.bots[id].get_timeline("ml%d_gt" % (id+1), n=100)
+                for tweet in timeline:
+                    self.bots[id].api.destroy_status(tweet.id)
+
+    def delete_last_tweet(self, all=1, bot_id=0):
+        for id in range(0, 4+1):
+            if all or (all == 0 and id == bot_id):
+                timeline = self.bots[id].get_timeline("ml%d_gt" % (id+1), n=1)
                 for tweet in timeline:
                     self.bots[id].api.destroy_status(tweet.id)
 
@@ -157,7 +165,7 @@ class main:
         """
         done = 0
         list_first_person = ["we", "we've", "we'll", "we're", "our", "me", 
-                             "my", "us", "i", "i'll", "you"]
+                             "my", "mine", "us", "i", "i'll", "i'm", "i've"]
 
         # List of sources, each of which will get eliminated
         # if all of its most recent 5 tweets are not suitable for posting
@@ -334,7 +342,7 @@ class main:
         # id_str of previous tweet, # likes, # retweets, # followers
         num_like_prev, num_retweet_prev = self.observe_num_like_retweet(bot_id, tweet_id_str)
         self.bots[bot_id].update_followers()
-        f = open( "/home/t3500/devdata/rlbot_data/records_%d.csv" % bot_id, 'a' )
+        f = open("%s/records_%d.csv" % (self.path, bot_id), "a")
         f.write("%s,%s,%d,%d,%d\n" % (tweet_id_str, tweet_time, num_like_prev, 
                                  num_retweet_prev, 
                                  self.bots[bot_id].num_followers))
@@ -350,7 +358,7 @@ class main:
             retweeter_datetime = retweeter[1].strftime('%Y-%m-%d-%H-%M-%S')
             s += "%s,%s," % (retweeter_id_str, retweeter_datetime)
         s += "\n"
-        f = open( "/home/t3500/devdata/rlbot_data/retweeters_%d.csv" % bot_id, 'a' )        
+        f = open("%s/retweeters_%d.csv" % (self.path, bot_id), "a")
         f.write(s)
         f.close()
         
@@ -362,7 +370,7 @@ class main:
         for liker_id_str in list_liker:
             s += "%s," % liker_id_str
         s += "\n"
-        f = open( "/home/t3500/devdata/rlbot_data/likers_%d.csv" % bot_id, 'a' )            
+        f = open("%s/likers_%d.csv" % (self.path, bot_id), "a")
         f.write(s)            
         f.close()
 
@@ -454,6 +462,7 @@ class main:
         # Placeholder of 1 hours 0 minutes and 0 seconds
         return (1,0,0)
 
+
 #    def calc_observation_time(self, map_bot_action_seq):
 #        """
 #        Given mapping from bot to list of action times, returns mapping from
@@ -537,7 +546,7 @@ class main:
         for index in range(0, count):
             map_id_index[ list_followers[index] ] = index
 
-        f = open("/home/t3500/devdata/rlbot_data/matrix_day%d.csv" % day, "a")
+        f = open("%s/matrix_day%d.csv" % (self.path, day), "a")
         # Write header
         s = ","
         for id_str in list_followers:
@@ -583,7 +592,7 @@ class main:
                 tweets = self.observer.get_timeline(follower_id, verbose=0)            
 
             # Write to records_*.csv
-            path_to_file = "/home/t3500/devdata/rlbot_data/records_%s.csv" % follower_id
+            path_to_file = "%s/records_%s.csv" % (self.path, follower_id)
             if os.path.isfile(path_to_file):
                 f = open(path_to_file, "a")
             else: # if file did not exist previously, write header
@@ -599,7 +608,7 @@ class main:
             list_tweet_id = [tweet.id_str for tweet in tweets]
             
             # Write to likers_*.csv
-            f = open("/home/t3500/devdata/rlbot_data/likers_%s.csv" % follower_id, "a")
+            f = open("%s/likers_%s.csv" % (self.path, follower_id), "a")
             for tweet_id_str in list_tweet_id[::-1]:
                 s = "%s," % tweet_id_str
                 list_liker = self.observer.get_likers(tweet_id_str)
@@ -609,7 +618,7 @@ class main:
             f.close()
 
             map_tweet_retweeter = self.observer.get_retweets( list_tweet_id )
-            f = open("/home/t3500/devdata/rlbot_data/retweeters_%s.csv" % follower_id, "a")
+            f = open("%s/retweeters_%s.csv" % (self.path, follower_id), "a")
             # Write to retweeters_*.csv
             for tweet_id_str in list_tweet_id[::-1]:
                 s = "%s," % tweet_id_str
@@ -650,6 +659,7 @@ class main:
             num_day += 1
             f = open(self.logfilename, "a")
             f.write("\nDay %d\n" % num_day)
+            f.close()
             print "Day %d" % num_day
         
             # At start of this day, update the set of people to track
@@ -667,10 +677,10 @@ class main:
             # made during this day
             map_follower_lasttweet_day = {}
             # Write header for tracker_day*.csv
-            f = open("/home/t3500/devdata/rlbot_data/tracker_day%d.csv" % num_day, 'a')
-            s = "Time,"
+            # f = open("%s/tracker_day%d.csv" % (self.path, num_day), "a")
+            # s = "Time,"
             for follower_id_str in list_to_track:
-                s += "%s," % follower_id_str
+                # s += "%s," % follower_id_str
                 tweet_list = self.observer.get_timeline(follower_id_str, n=1, verbose=0)
                 if len(tweet_list) != 0:
                     map_follower_lasttweet[follower_id_str] = tweet_list[0].id_str
@@ -678,16 +688,16 @@ class main:
                 else:
                     map_follower_lasttweet[follower_id_str] = ''
                     map_follower_lasttweet_day[follower_id_str] = ''                    
-            s += "\n"
-            f.write(s)
-            f.close()
+            # s += "\n"
+            # f.write(s)
+            # f.close()
 
             now = datetime.datetime.now()
         
             # At the start of each day, generate the entire set of action times
             # for all bots
-            self.generate_post_time_random( (8,0,0), (22,30,0), 2 )
-#            self.generate_post_time_random( (19,25,0), (19,30,0), 1 )
+            self.generate_post_time_random( (8,0,0), (22,30,0), 1 )
+            # self.generate_post_time_random( (8,0,0), (22,30,0), 1 )
 
             # NOTE: this method of putting action events into the queue all at once is only
             # correct for the version of the system that does not use the algorithm
@@ -703,10 +713,9 @@ class main:
         
             # Insert main observation events into the queue
             # The main observation bot has ID=5 (IDs start from 0)
-
-            for idx in range(0, len(self.observation_time)):
-                if self.is_after_now( now, self.observation_time[idx] ):
-                    self.event_queue.put((self.observation_time[idx], 5, 'o_main'))
+#            for idx in range(0, len(self.observation_time)):
+#                if self.is_after_now( now, self.observation_time[idx] ):
+#                    self.event_queue.put((self.observation_time[idx], 5, 'o_main'))
         
             # While there are remaining events for this day
             while self.event_queue.qsize():
@@ -759,7 +768,7 @@ class main:
 #                    self.event_queue.put( (t_action, event_bot, 'a') )
                 elif event_type == 'o_main': 
                     # Main observation event (i.e. every hour)
-                    f = open("/home/t3500/devdata/rlbot_data/tracker_day%d.csv" % num_day, 'a')
+                    f = open("%s/tracker_day%d.csv" % (self.path, num_day), "a")
                     # Write time
                     f.write("%d-%d-%d," % (event_time[0], event_time[1], event_time[2]))
                     for follower_id_str in list_to_track:
@@ -775,23 +784,24 @@ class main:
                             map_follower_lasttweet[follower_id_str] = tweet_list[0].id_str
                         f.write("%d," % len(tweet_list))
                     f.write("\n")
-
+                    f.close()
+                    
+            # Sleep until 00:00:10 of next day
+            current_time = datetime.datetime.now()
+            sec_until_tomorrow = 24*3600 - (current_time.hour*3600 + current_time.minute*60 \
+                                            + current_time.second)                                            
+            print "Sleep for %d seconds until tomorrow" % sec_until_tomorrow
+            time.sleep(sec_until_tomorrow + 10)
+            
             # Record connectivity matrix
             self.record_network(list_to_track, num_day)
                         
             # Record follower details
             self.observe_follower_detail(list_to_track, map_follower_lasttweet_day)
 
-            # Clear the list of tweets made by each bot during this day
-            self.map_bot_already_tweeted = { bot_id:[] for bot_id in range(0,4+1) }
-                    
-            # Sleep until 00:00:10 of next day
-            current_time = datetime.datetime.now()
-            sec_until_tomorrow = 24*3600 - (current_time.hour*3600 + current_time.minute*60 \
-                                            + current_time.second)                                            
-            time.sleep(sec_until_tomorrow + 10)
-            
-           
+            # Clear the list of tweets made by each bot during previous day
+            self.map_bot_already_tweeted = { bot_id:[] for bot_id in range(0,4+1) }           
+
 
 if __name__ == "__main__":
     
