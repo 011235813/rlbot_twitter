@@ -19,11 +19,14 @@ import os
 
 class main:
 
-    def __init__(self, init_bots=1, init_observer=1, logfile='/home/t3500/devdata/rlbot_data/log.txt'):
+    def __init__(self, init_bots=1, init_observer=1, sourcefile='source.txt', 
+                 logfile='/home/t3500/devdata/rlbot_data/log.txt'):
         
         self.logfilename = logfile
-        self.path = '/home/t3500/devdata/rlbot_data'
+#        self.path = '/home/t3500/devdata/rlbot_data'
 #        self.path = '/home/jyang/Documents/rlbot_twitter'
+#        self.path = '/home/t3500/devdata/rlbot_data_course'
+        self.path = '/home/t3500/devdata/rlbot_data_highfrequency'
 
         # List of bots
         self.bots = []
@@ -51,7 +54,7 @@ class main:
         # List of screen_name of accounts whose tweets will be copied 
         # and tweeted by the bot
         self.list_source = []
-        self.populate_source( 'source.txt' )
+        self.populate_source( sourcefile )
         
         # Map from bot_id to list of tweet_id_str, 
         # which uniquely define the tweets that the bot has already made
@@ -220,6 +223,9 @@ class main:
                         if word in list_token:
                             violate = 1
                             break
+                    # Violation occurs if tweet is a "reply" (e.g. "Blah @someone blah")
+                    if ( ('RT @' not in text) and ('@' in text) ):
+                        violate = 1
                     if violate == 0:
                         # If no violation was found, return this tweet
                         done_inner = 1
@@ -584,12 +590,18 @@ class main:
         2. map_follower_lasttweet_day - map from follower_id_str to id_str of the most recent post
         as recorded at the start of the day
         """
+
+        num_posts = 0 # count the total actions taken by all followers
+
         for follower_id in list_to_track:
             last_tweet = map_follower_lasttweet_day[follower_id]
             if last_tweet != '':
                 tweets = self.observer.get_timeline_since(follower_id, since=last_tweet)
             else:
                 tweets = self.observer.get_timeline(follower_id, verbose=0)            
+
+            num_posts += len(tweets)
+
 
             # Write to records_*.csv
             path_to_file = "%s/records_%s.csv" % (self.path, follower_id)
@@ -600,6 +612,11 @@ class main:
                 f.write("tweet_id_str,time,text,num_like,num_retweet\n")
             for tweet in tweets[::-1]:
                 creation_time = tweet.created_at.strftime('%Y-%m-%d %H:%M:%S')
+                # The following line, rather than the previous line, is the correct EST
+                # datetime, but stick to the previous one for consistency. 
+                # Just subtract 4 hours from records_*.csv (excluding records_{0,1,2,3,4})
+                # at the end of data collection.
+                # creation_time = (tweet.created_at + datetime.timedelta(hours=-4)).strftime('%Y-%m-%d %H:%M:%S')
                 text_mod = tweet.text.replace("\n", " ") # remove newlines
                 s = "%s,%s,%s,%d,%d\n" % (tweet.id_str, creation_time, text_mod, tweet.favorite_count, tweet.retweet_count)
                 f.write(s.encode('utf8'))
@@ -630,7 +647,11 @@ class main:
                 s += "\n"
                 f.write(s)
             f.close()
-            
+
+        f = open(self.logfilename, "a")
+        f.write("Total activity by followers: %d\n" % num_posts)
+        f.close()        
+
 
     def run(self, total_day, start_day_num=0, header=0):
         """
@@ -662,6 +683,9 @@ class main:
             f.close()
             print "Day %d" % num_day
         
+            # Reset number of posts made during day
+            num_post = 0
+
             # At start of this day, update the set of people to track
             self.observer.update_tracking( ['ml%d_gt' % idx for idx in range(1,5+1)] )
             list_to_track = list(self.observer.tracking)
@@ -696,7 +720,7 @@ class main:
         
             # At the start of each day, generate the entire set of action times
             # for all bots
-            self.generate_post_time_random( (8,0,0), (22,30,0), 1 )
+            self.generate_post_time_random( (8,0,0), (23,0,0), 5 )
             # self.generate_post_time_random( (8,0,0), (22,30,0), 1 )
 
             # NOTE: this method of putting action events into the queue all at once is only
@@ -743,15 +767,19 @@ class main:
                 if event_type == 'a':
                     id_str_mine = self.act(event_bot, attribute=0, verbose=1)
                     if id_str_mine != "":
+                        num_post += 1
                         # Merely using the addition function of the datetime package
                         # to get the hour,minute,second of time to observe the response
                         # to this action. The year, month and day do not matter
-                        datetime_action = datetime.datetime(2016,1,1,event_time[0],
-                                                            event_time[1],event_time[2])
-                        datetime_observe = datetime_action + datetime.timedelta(hours=wait_time[0], 
-                                                                                minutes=wait_time[1],
-                                                                                seconds=wait_time[2])
-                        t_observe = (datetime_observe.hour, datetime_observe.minute, datetime_observe.second)
+#                        datetime_action = datetime.datetime(2016,1,1,event_time[0],
+#                                                            event_time[1],event_time[2])
+#                        datetime_observe = datetime_action \
+#                            + datetime.timedelta(hours=wait_time[0], 
+#                                                 minutes=wait_time[1],
+#                                                 seconds=wait_time[2])
+#                        t_observe = (datetime_observe.hour, 
+#                                     datetime_observe.minute, datetime_observe.second)
+                        t_observe = (23,30,num_post)
                         # Insert the observation event into the queue
                         self.event_queue.put( (t_observe, event_bot, 'o') )
                 elif event_type == 'o': # If event is an observation of response

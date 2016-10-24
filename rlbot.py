@@ -349,6 +349,9 @@ class rlbot:
                     # Update list boundaries
                     idx_start = idx_end
                     idx_end = min(idx_start+100, total)
+                except tweepy.RateLimitError:
+                    print "rlbot.get_num_like_retweet() rate limit error"
+                    self.wait_limit_reset('status_lookup')
                 except tweepy.TweepError:
                     return list_like, list_retweet
             else:
@@ -624,6 +627,10 @@ class rlbot:
                         # up to 100 of the first retweets of the given tweet
                         retweet_list = self.api.retweets(tweet_id, count=100, trim_user=True)
                         self.remaining['retweets'] -= 1
+                    except tweepy.RateLimitError:
+                        print "rlbot.get_retweets() rate limit error"
+                        self.wait_limit_reset('retweets')
+                        continue
                     except tweepy.TweepError:
                         # reached rate limit, stop iterating
                         return return_dic                  
