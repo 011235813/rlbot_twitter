@@ -580,7 +580,7 @@ class main:
         f.close()
 
 
-    def observe_follower_detail(self, list_to_track, map_follower_lasttweet_day):
+    def observe_follower_detail(self, list_to_track, map_follower_lasttweet):
         """
         This function is called only at the end of a day, after event_queue has been emptied
         For each follower, append to three files:
@@ -590,14 +590,14 @@ class main:
 
         Argument
         1. list_to_track - the list of followers (refreshed at start of every day)
-        2. map_follower_lasttweet_day - map from follower_id_str to id_str of the most recent post
+        2. map_follower_lasttweet - map from follower_id_str to id_str of the most recent post
         as recorded at the start of the day
         """
 
         num_posts = 0 # count the total actions taken by all followers
 
         for follower_id in list_to_track:
-            last_tweet = map_follower_lasttweet_day[follower_id]
+            last_tweet = map_follower_lasttweet[follower_id]
             if last_tweet != '':
                 tweets = self.observer.get_timeline_since(follower_id, since=last_tweet)
             else:
@@ -653,6 +653,64 @@ class main:
         f.close()        
 
 
+    def observe_follower_friend_detail(self, list_to_track, map_follower_map_friend_lasttweet):
+        """
+        This function is called only at the end of a day, after event_queue has been emptied
+        For each follower, append to file:
+        records_*.csv - friend_id, tweet_id, time created, num likes, num retweets, num followers
+
+        Argument
+        1. list_to_track - the list of followers (refreshed at start of every day)
+        2. map_follower_map_friend_lasttweet - map from follower_id_str to map from 
+        friend_id_str to id_str of the most recent post as recorded at the start of the day
+        """
+        # Counter for get_timeline() rate limit
+        counter_timeline = 0
+        # Bot to use for get_timeline(). Cyclic
+        bot_id_timeline = 0
+
+        # For each follower of bot
+        for follower_id in list_to_track:
+            # Extract the map from friend_id --> tweet_id
+            map_friend_lasttweet = map_follower_map_friend_lasttweet[follower_id]
+            
+            # Open friends_of_*.csv for appending
+            path_to_file = "%s/friends_of_%s.csv" % (self.path, follower_id)
+            if os.path.isfile(path_to_file):
+                f = open(path_to_file, "a")
+            else: # if file did not exist previously, write header
+                f = open(path_to_file, "a")
+                f.write("friend_id,tweet_id,time,text,num_like,num_retweet,num_posts\n")
+
+            # For each friend and their respective last tweet
+            for friend_id_str, tweet_id_str in map_friend_lasttweet.iteritems():
+                # Get all new tweets since the last tweet
+                if tweet_id_str != '':
+                    # tweets = self.observer.get_timeline_since(friend_id_str, since=tweet_id_str)
+                    tweets = self.bots[bot_id_timeline].get_timeline_since(friend_id_str, since=tweet_id_str)
+                else:
+                    # tweets = self.observer.get_timeline(follower_id, verbose=0)
+                    tweets = self.bots[bot_id_timeline].get_timeline(friend_id_str, verbose=0)
+
+                # Check whether need to switch to another bot for get_timeline
+                counter_timeline += 1
+                if counter_timeline == 180:
+                    bot_id_timeline = (bot_id_timeline + 1) % 6 # go to next bot
+                    counter_timeline = 0 # reset counter
+
+                num_posts = len(tweets)
+
+                # Record details of each tweet made during the day
+                for tweet in tweets[::-1]:
+                    creation_time = (tweet.created_at + 
+                                     datetime.timedelta(hours=-4)).strftime('%Y-%m-%d-%H:%M:%S')
+                    text_mod = tweet.text.replace("\n", " ") # remove newlines
+                    s = "%s,%s,%s,%s,%d,%d,%d\n" % (friend_id_str, tweet.id_str, creation_time, text_mod,
+                                                 tweet.favorite_count, tweet.retweet_count, num_posts)
+                    f.write(s.encode('utf8'))
+                    
+            f.close()            
+
     def reservoir_sample(self, input_list, N):
         """
         Returns list of N randomly sampled points from input_list
@@ -667,6 +725,74 @@ class main:
                 sample[replace] = element
         return sample
 
+    def initialize_maps(self, list_to_track):
+        """
+        This function is called at the start of every day (usually sometime between 12midnight-1am)
+        Takes in list_to_track, which is the list of all followers of the bots
+        Returns two maps:
+        1. map_follower_lasttweet - map from follower_id to tweet_id of most recent tweet
+        2. map_follower_map_friend_lasttweet - map from follower_id to map from friend_id
+        to tweet_id of most recent tweet by that friend of that follower
+        """
+        # Map from follower_id_str --> id_str of last post
+        map_follower_lasttweet = {}
+        # Map from follower_id_str --> map from friend_id_str --> id_str of last post
+        map_follower_map_friend_lasttweet = {}
+        # Counter for get_timeline() rate limit
+        counter_timeline = 0
+        # Bot to use for get_timeline(). Cyclic
+        bot_id_timeline = 0
+        # Counter for get_friends() rate limit
+        counter_friends = 0
+        # Bot to use for get_friends(). Cyclic
+        bot_id_friends = 0
+
+        for follower_id_str in list_to_track:
+            # Get the most recent post by follower_id_str
+            # tweet_list = self.observer.get_timeline(follower_id_str, n=1, verbose=0)
+            tweet_list = self.bots[bot_id_timeline].get_timeline(follower_id_str, n=1)
+
+            # Store most recent post by follower_id_str, if post exists
+            if len(tweet_list) != 0:
+                map_follower_lasttweet[follower_id_str] = tweet_list[0].id_str
+            else:
+                map_follower_lasttweet[follower_id_str] = ''
+
+            # Check whether need to switch to another bot for get_timeline
+            counter_timeline += 1
+            if counter_timeline == 180:
+                bot_id_timeline = (bot_id_timeline + 1) % 6 # go to next bot
+                counter_timeline = 0 # reset counter
+
+            # Get list of all friends of follower_id_str
+            # list_friends = self.observer.get_friends(follower_id_str)
+            list_friends = self.bots[bot_id_friends].get_friends(follower_id_str)
+            if len(list_friends) > 50:
+                list_friends = self.reservoir_sample(list_friends, 50)
+
+            # Check whether need to switch to another bot
+            counter_friends += 1
+            if counter_friends == 15:
+                bot_id_friends = (bot_id_friends + 1) % 6 # go to next bot
+                counter_friends = 0 # reset counter
+
+            # Map from friend_id_str --> id_str of last post
+            map_friend_lasttweet = {}
+            for friend_id_str in list_friends:
+                tweet_list = self.observer.get_timeline(friend_id_str, n=1, verbose=0)
+                if len(tweet_list) != 0:
+                    map_friend_lasttweet[friend_id_str] = tweet_list[0].id_str
+                else:
+                    map_friend_lasttweet[friend_id_str] = ''
+                counter_timeline += 1
+                if counter_timeline == 180:
+                    bot_id_timeline = (bot_id_timeline + 1) % 6 # go to next bot
+                    counter_timeline = 0 # reset counter
+
+            map_follower_map_friend_lasttweet[follower_id_str] = map_friend_lasttweet
+
+        return map_follower_lasttweet, map_follower_map_friend_lasttweet
+
 
     def run(self, total_day, start_day_num=0, header=0):
         """
@@ -680,12 +806,10 @@ class main:
         has already elapsed.
         3. header - 1 to write headers in records_*.csv
         """        
-        
         if header:
             self.write_headers()
 
         num_day = start_day_num
-
         # Each iteration of this loop is a day
         while num_day < total_day:
         
@@ -702,66 +826,8 @@ class main:
             self.observer.update_tracking( ['ml%d_gt' % idx for idx in range(1,5+1)] )
             list_to_track = list(self.observer.tracking)
             list_to_track.sort()
-        
-            # Map from follower_id_str --> id_str of last post
-            # Used at the end of the day to get all new posts that the follower
-            # made during this day
-            map_follower_lasttweet_day = {}
-            # Map from follower_id_str --> map from friend_id_str --> id_str of last post
-            # Used at end of day to get all new posts that friends of followers
-            # made during this day
-            map_follower_map_friend_lasttweet = {}
-            # Counter for get_timeline() rate limit
-            counter_timeline = 0
-            # Bot to use for get_timeline(). Cyclic
-            bot_id_timeline = 0
-            # Counter for get_friends() rate limit
-            counter_friends = 0
-            # Bot to use for get_friends(). Cyclic
-            bot_id_friends = 0
-            for follower_id_str in list_to_track:
-                # Get the most recent post by follower_id_str
-                # tweet_list = self.observer.get_timeline(follower_id_str, n=1, verbose=0)
-                tweet_list = self.bots[bot_id_timeline].get_timeline(follower_id_str, n=1)
 
-                # Store most recent post by follower_id_str, if post exists
-                if len(tweet_list) != 0:
-                    map_follower_lasttweet_day[follower_id_str] = tweet_list[0].id_str
-                else:
-                    map_follower_lasttweet_day[follower_id_str] = ''
-
-                # Check whether need to switch to another bot for get_timeline
-                counter_timeline += 1
-                if counter_timeline == 180:
-                    bot_id_timeline = (bot_id_timeline + 1) % 6 # go to next bot
-                    counter_timeline = 0 # reset counter
-
-                # Get list of all friends of follower_id_str
-                # list_friends = self.observer.get_friends(follower_id_str)
-                list_friends = self.bots[bot_id_friends].get_friends(follower_id_str)
-                if len(list_friends) > 50:
-                    list_friends = self.reservoir_sample(list_friends, 50)
-
-                # Check whether need to switch to another bot
-                counter_friends += 1
-                if counter_friends == 15:
-                    bot_id_friends = (bot_id_friends + 1) % 6 # go to next bot
-                    counter_friends = 0 # reset counter
-
-                # Map from friend_id_str --> id_str of last post
-                map_friend_lasttweet = {}
-                for friend_id_str in list_friends:
-                    tweet_list = self.observer.get_timeline(friend_id_str, n=1, verbose=0)
-                    if len(tweet_list) != 0:
-                        map_friend_lasttweet[friend_id_str] = tweet_list[0].id_str
-                    else:
-                        map_friend_lasttweet[friend_id_str] = ''
-                    counter_timeline += 1
-                    if counter_timeline == 180:
-                        bot_id_timeline = (bot_id_timeline + 1) % 6 # go to next bot
-                        counter_timeline = 0 # reset counter
-
-                map_follower_map_friend_lasttweet[follower_id_str] = map_friend_lasttweet
+            map_follower_lasttweet, map_follower_map_friend_lasttweet = self.initialize_maps(list_to_track)
 
             now = datetime.datetime.now()
         
@@ -792,13 +858,11 @@ class main:
                 
                 # Get current time
                 now = datetime.datetime.now()
-    
                 # Seconds elapsed since the start of the day
                 now_seconds = 3600*now.hour + 60*now.minute + now.second
                 event_time_seconds = 3600*event_time[0] + 60*event_time[1] + event_time[2]
     
                 t_delay = event_time_seconds - now_seconds
-                
                 # Wait until the event is supposed to occur
                 if t_delay > 0:
                     print "Delay %d" % t_delay
@@ -826,7 +890,10 @@ class main:
             self.record_network(list_to_track, num_day)
                         
             # Record follower details
-            self.observe_follower_detail(list_to_track, map_follower_lasttweet_day)
+            self.observe_follower_detail(list_to_track, map_follower_lasttweet)
+
+            # Record follower's friends details
+            self.observe_follower_friend_detail(list_to_track, map_follower_map_friend_lasttweet)
 
             # Clear the list of tweets made by each bot during previous day
             self.map_bot_already_tweeted = { bot_id:[] for bot_id in range(0,4+1) }           
