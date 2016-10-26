@@ -290,6 +290,10 @@ class rlbot:
                     friends = self.api.friends_ids(userid, stringify_ids=True)
                     self.remaining['friends'] -= 1
                     done = 1
+                except tweepy.RateLimitError:
+                    print "%s get_friends() rate limit error" % self.name
+                    self.wait_limit_reset('friends')
+                    continue
                 except tweepy.TweepError:
                     return friends
             else:
@@ -350,7 +354,7 @@ class rlbot:
                     idx_start = idx_end
                     idx_end = min(idx_start+100, total)
                 except tweepy.RateLimitError:
-                    print "rlbot.get_num_like_retweet() rate limit error"
+                    print "%s get_num_like_retweet() rate limit error" % self.name
                     self.wait_limit_reset('status_lookup')
                 except tweepy.TweepError:
                     return list_like, list_retweet
@@ -396,7 +400,7 @@ class rlbot:
                         last = tweet_list[-1].id - 1
                         done = 1
                 except tweepy.RateLimitError:
-                    print "rlbot.get_timeline_since() rate limit error"
+                    print "%s get_timeline_since() rate limit error" % self.name
                     self.wait_limit_reset('timeline')
                 except tweepy.TweepError:
                     return tweet_list
@@ -424,7 +428,7 @@ class rlbot:
                             last = tweet_list[-1].id - 1
                             done = 1
                     except tweepy.RateLimitError:
-                        print "rlbot.get_timeline_since() rate limit error"
+                        print "%s get_timeline_since() rate limit error" % self.name
                         self.wait_limit_reset('timeline')
                     except tweepy.TweepError:
                         return tweet_list
@@ -471,7 +475,7 @@ class rlbot:
                         last = tweet_list[-1].id - 1
                     done = 1
                 except tweepy.RateLimitError:
-                    print "rlbot.get_timeline() rate limit error"
+                    print "%s get_timeline() rate limit error" % self.name
                     self.wait_limit_reset('timeline')
                 except tweepy.TweepError:
                     return tweet_list
@@ -497,7 +501,7 @@ class rlbot:
                         last = tweet_list[-1].id - 1
                         done = 1     
                     except tweepy.RateLimitError:
-                        print "rlbot.get_timeline() rate limit error"
+                        print "%s get_timeline() rate limit error" % self.name
                         self.wait_limit_reset('timeline')
                     except tweepy.TweepError:
                         return tweet_list
@@ -628,7 +632,7 @@ class rlbot:
                         retweet_list = self.api.retweets(tweet_id, count=100, trim_user=True)
                         self.remaining['retweets'] -= 1
                     except tweepy.RateLimitError:
-                        print "rlbot.get_retweets() rate limit error"
+                        print "%s get_retweets() rate limit error" % self.name
                         self.wait_limit_reset('retweets')
                         continue
                     except tweepy.TweepError:

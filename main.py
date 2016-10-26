@@ -37,6 +37,9 @@ class main:
         if init_observer:
             self.observer = rlbot.rlbot('matt_learner', 'key_ml.txt')
 
+        if init_bots and init_observer:
+            self.bots.append( self.observer )
+
         # List of times to observe activity of followers
         # This is independent of the observations made by each bot
         # Each bot is responsible for observing the response to its own tweets
@@ -602,7 +605,6 @@ class main:
 
             num_posts += len(tweets)
 
-
             # Write to records_*.csv
             path_to_file = "%s/records_%s.csv" % (self.path, follower_id)
             if os.path.isfile(path_to_file):
@@ -611,12 +613,10 @@ class main:
                 f = open(path_to_file, "a")
                 f.write("tweet_id_str,time,text,num_like,num_retweet\n")
             for tweet in tweets[::-1]:
-                creation_time = tweet.created_at.strftime('%Y-%m-%d %H:%M:%S')
-                # The following line, rather than the previous line, is the correct EST
-                # datetime, but stick to the previous one for consistency. 
-                # Just subtract 4 hours from records_*.csv (excluding records_{0,1,2,3,4})
-                # at the end of data collection.
-                # creation_time = (tweet.created_at + datetime.timedelta(hours=-4)).strftime('%Y-%m-%d %H:%M:%S')
+                # creation_time = tweet.created_at.strftime('%Y-%m-%d %H:%M:%S')
+                # The following line, not the previous line, is the correct EST datetime
+                creation_time = (tweet.created_at + 
+                                 datetime.timedelta(hours=-4)).strftime('%Y-%m-%d-%H:%M:%S')
                 text_mod = tweet.text.replace("\n", " ") # remove newlines
                 s = "%s,%s,%s,%d,%d\n" % (tweet.id_str, creation_time, text_mod, tweet.favorite_count, tweet.retweet_count)
                 f.write(s.encode('utf8'))
@@ -653,6 +653,21 @@ class main:
         f.close()        
 
 
+    def reservoir_sample(self, input_list, N):
+        """
+        Returns list of N randomly sampled points from input_list
+        """
+        sample = []
+        # Single pass through list
+        for idx, element in enumerate(input_list):
+            if idx < N:
+                sample.append(element)
+            elif i >= N and random.random() < N / float(idx+1):
+                replace = random.randint(0, len(sample)-1)
+                sample[replace] = element
+        return sample
+
+
     def run(self, total_day, start_day_num=0, header=0):
         """
         Main program that schedules and executes all events for the entire
@@ -669,9 +684,6 @@ class main:
         if header:
             self.write_headers()
 
-        # Time to wait between making tweet and observing response
-        wait_time = self.get_wait_time()        
-        
         num_day = start_day_num
 
         # Each iteration of this loop is a day
@@ -691,30 +703,65 @@ class main:
             list_to_track = list(self.observer.tracking)
             list_to_track.sort()
         
-            # Map from follower_id_str --> id_str of of the last post by that follower
-            # This map will be updated at every main observation event.
-            # Enables recording of number of posts by follower in 1 hour intervals
-            map_follower_lasttweet = {}
-            # Another map from follower_id_str --> id_str of last post
-            # This map DOES NOT get updated every hour.
-            # It will be used at the end of the day to get all new posts that the follower
+            # Map from follower_id_str --> id_str of last post
+            # Used at the end of the day to get all new posts that the follower
             # made during this day
             map_follower_lasttweet_day = {}
-            # Write header for tracker_day*.csv
-            # f = open("%s/tracker_day%d.csv" % (self.path, num_day), "a")
-            # s = "Time,"
+            # Map from follower_id_str --> map from friend_id_str --> id_str of last post
+            # Used at end of day to get all new posts that friends of followers
+            # made during this day
+            map_follower_map_friend_lasttweet = {}
+            # Counter for get_timeline() rate limit
+            counter_timeline = 0
+            # Bot to use for get_timeline(). Cyclic
+            bot_id_timeline = 0
+            # Counter for get_friends() rate limit
+            counter_friends = 0
+            # Bot to use for get_friends(). Cyclic
+            bot_id_friends = 0
             for follower_id_str in list_to_track:
-                # s += "%s," % follower_id_str
-                tweet_list = self.observer.get_timeline(follower_id_str, n=1, verbose=0)
+                # Get the most recent post by follower_id_str
+                # tweet_list = self.observer.get_timeline(follower_id_str, n=1, verbose=0)
+                tweet_list = self.bots[bot_id_timeline].get_timeline(follower_id_str, n=1)
+
+                # Store most recent post by follower_id_str, if post exists
                 if len(tweet_list) != 0:
-                    map_follower_lasttweet[follower_id_str] = tweet_list[0].id_str
                     map_follower_lasttweet_day[follower_id_str] = tweet_list[0].id_str
                 else:
-                    map_follower_lasttweet[follower_id_str] = ''
-                    map_follower_lasttweet_day[follower_id_str] = ''                    
-            # s += "\n"
-            # f.write(s)
-            # f.close()
+                    map_follower_lasttweet_day[follower_id_str] = ''
+
+                # Check whether need to switch to another bot for get_timeline
+                counter_timeline += 1
+                if counter_timeline == 180:
+                    bot_id_timeline = (bot_id_timeline + 1) % 6 # go to next bot
+                    counter_timeline = 0 # reset counter
+
+                # Get list of all friends of follower_id_str
+                # list_friends = self.observer.get_friends(follower_id_str)
+                list_friends = self.bots[bot_id_friends].get_friends(follower_id_str)
+                if len(list_friends) > 50:
+                    list_friends = self.reservoir_sample(list_friends, 50)
+
+                # Check whether need to switch to another bot
+                counter_friends += 1
+                if counter_friends == 15:
+                    bot_id_friends = (bot_id_friends + 1) % 6 # go to next bot
+                    counter_friends = 0 # reset counter
+
+                # Map from friend_id_str --> id_str of last post
+                map_friend_lasttweet = {}
+                for friend_id_str in list_friends:
+                    tweet_list = self.observer.get_timeline(friend_id_str, n=1, verbose=0)
+                    if len(tweet_list) != 0:
+                        map_friend_lasttweet[friend_id_str] = tweet_list[0].id_str
+                    else:
+                        map_friend_lasttweet[friend_id_str] = ''
+                    counter_timeline += 1
+                    if counter_timeline == 180:
+                        bot_id_timeline = (bot_id_timeline + 1) % 6 # go to next bot
+                        counter_timeline = 0 # reset counter
+
+                map_follower_map_friend_lasttweet[follower_id_str] = map_friend_lasttweet
 
             now = datetime.datetime.now()
         
@@ -734,12 +781,6 @@ class main:
                 for t_action in list_time:
                     if self.is_after_now( now, t_action ):
                         self.event_queue.put( (t_action, bot_id, 'a') )
-        
-            # Insert main observation events into the queue
-            # The main observation bot has ID=5 (IDs start from 0)
-#            for idx in range(0, len(self.observation_time)):
-#                if self.is_after_now( now, self.observation_time[idx] ):
-#                    self.event_queue.put((self.observation_time[idx], 5, 'o_main'))
         
             # While there are remaining events for this day
             while self.event_queue.qsize():
@@ -768,51 +809,11 @@ class main:
                     id_str_mine = self.act(event_bot, attribute=0, verbose=1)
                     if id_str_mine != "":
                         num_post += 1
-                        # Merely using the addition function of the datetime package
-                        # to get the hour,minute,second of time to observe the response
-                        # to this action. The year, month and day do not matter
-#                        datetime_action = datetime.datetime(2016,1,1,event_time[0],
-#                                                            event_time[1],event_time[2])
-#                        datetime_observe = datetime_action \
-#                            + datetime.timedelta(hours=wait_time[0], 
-#                                                 minutes=wait_time[1],
-#                                                 seconds=wait_time[2])
-#                        t_observe = (datetime_observe.hour, 
-#                                     datetime_observe.minute, datetime_observe.second)
                         t_observe = (23,30,num_post)
                         # Insert the observation event into the queue
                         self.event_queue.put( (t_observe, event_bot, 'o') )
                 elif event_type == 'o': # If event is an observation of response
                     self.record(event_bot)
-                    # Once the system incorporates the algorithm, then the
-                    # code below will be needed to get the next time to make a 
-                    # post, because the next time to make a post will be determined
-                    # by the algorithm only after it has observed the response to the
-                    # previous post.
-#                    t_action = self.get_post_time(event_bot, self.num_like_prev[event_bot], 
-#                                                  self.num_retweet_prev[event_bot], 
-#                                                  self.num_follower[event_bot], 
-#                                                  initial=0)
-#                    self.event_queue.put( (t_action, event_bot, 'a') )
-                elif event_type == 'o_main': 
-                    # Main observation event (i.e. every hour)
-                    f = open("%s/tracker_day%d.csv" % (self.path, num_day), "a")
-                    # Write time
-                    f.write("%d-%d-%d," % (event_time[0], event_time[1], event_time[2]))
-                    for follower_id_str in list_to_track:
-                        last_id_str = map_follower_lasttweet[follower_id_str]
-                        if last_id_str != '':
-                            tweet_list = self.observer.get_timeline_since(follower_id_str, 
-                                                                      since=last_id_str, 
-                                                                      verbose=0)
-                        else:
-                            tweet_list = self.observer.get_timeline(follower_id_str, verbose=0)
-                        if len(tweet_list) != 0:
-                            # Update to the new most recent tweet
-                            map_follower_lasttweet[follower_id_str] = tweet_list[0].id_str
-                        f.write("%d," % len(tweet_list))
-                    f.write("\n")
-                    f.close()
                     
             # Sleep until 00:00:10 of next day
             current_time = datetime.datetime.now()
