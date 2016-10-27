@@ -214,8 +214,8 @@ class rlbot:
                     reset_time = self.get_resettime(limits, choice)
                     if ( reset_time > current_time ):
                         t_delta = reset_time - current_time + self.margin
-                        print "Wait %d seconds for %s limit to reset" % \
-                            (t_delta, choice)
+                        print "%s wait %d seconds for %s limit to reset" % \
+                            (self.name, t_delta, choice)
                         time.sleep(t_delta)
                         self.update_limits()
                 return

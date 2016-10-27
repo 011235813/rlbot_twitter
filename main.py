@@ -563,10 +563,23 @@ class main:
         s += "\n"
         f.write(s)
 
+        # Counter for get_friends() rate limit
+        counter_friends = 0
+        # Bot to use for get_friends(). Cyclic
+        bot_id_friends = 0
+
         # Write rows of matrix
         for id_str in list_followers:
             # Get friends of this person
-            list_friend = self.observer.get_friends(id_str)
+            # list_friend = self.observer.get_friends(id_str)
+            list_friend = self.bots[bot_id_friends].get_friends(id_str)
+
+            # Check whether need to switch to another bot
+            counter_friends += 1
+            if counter_friends == 15:
+                bot_id_friends = (bot_id_friends + 1) % 6 # go to next bot
+                counter_friends = 0 # reset counter
+
             # Create row A_i, where A_ij = 1 iff the person with
             # id_str follows the person at column index j
             temp = [0 for x in range(0, count)]
