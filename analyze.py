@@ -8,7 +8,8 @@ class analyze:
     def __init__(self, dir_name):
         self.set_active = set() # set of people who took at least one measurable action
         self.map_user_count = {}
-        self.dir_name = "/home/t3500/devdata/rlbot_data_highfrequency"    
+        self.total_response = 0
+        self.dir_name = "/home/t3500/devdata/rlbot_data_highfrequency"
         # self.dir_name = dir_name
 
     def num_active(self):
@@ -50,6 +51,7 @@ class analyze:
                     if len(list_retweeter_time) != 0:
                         idx = 0
                         while idx < len(list_retweeter_time):
+                            self.total_response += 1
                             # Extract all odd elements
                             retweeter_id = list_retweeter_time[idx]
                             self.set_active.add(retweeter_id)
@@ -72,6 +74,7 @@ class analyze:
                     # Discard tweet_id (first element) and newline (last)
                     list_likers = line.split(',')[1:-1]
                     for liker_id in list_likers:
+                        self.total_response += 1
                         self.set_active.add(liker_id)
                         if liker_id in self.map_user_count:
                             self.map_user_count[liker_id] += 1
@@ -79,6 +82,12 @@ class analyze:
                             self.map_user_count[liker_id] = 1
                 f.close()
                             
-    def print_all(self):
+    def print_user_count(self):
         for key, value in self.map_user_count.iteritems():
-            print key, value        
+            print key, value
+
+    def get_total(self):
+        return self.total_response
+
+    def get_num_active(self):
+        return len(self.set_active)
