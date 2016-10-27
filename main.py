@@ -24,9 +24,9 @@ class main:
         
         self.logfilename = logfile
 #        self.path = '/home/t3500/devdata/rlbot_data'
-#        self.path = '/home/jyang/Documents/rlbot_twitter'
 #        self.path = '/home/t3500/devdata/rlbot_data_course'
-        self.path = '/home/t3500/devdata/rlbot_data_highfrequency'
+#        self.path = '/home/t3500/devdata/rlbot_data_highfrequency'
+        self.path = '/home/t3500/devdata/rlbot_data_secondorder'
 
         # List of bots
         self.bots = []
@@ -720,7 +720,7 @@ class main:
         for idx, element in enumerate(input_list):
             if idx < N:
                 sample.append(element)
-            elif i >= N and random.random() < N / float(idx+1):
+            elif idx >= N and random.random() < N / float(idx+1):
                 replace = random.randint(0, len(sample)-1)
                 sample[replace] = element
         return sample
