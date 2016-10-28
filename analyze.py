@@ -8,11 +8,13 @@ class analyze:
     def __init__(self, dir_name):
         self.set_active = set() # set of people who took at least one measurable action
         self.map_user_count = {}
+        self.map_user_response = {}
         self.total_response = 0
+        self.total_activity = 0
         self.dir_name = "/home/t3500/devdata/rlbot_data_highfrequency"
         # self.dir_name = dir_name
 
-    def num_active(self):
+    def calc_activity(self):
         """
         Return number of followers who were active during the collection period
         Active = made at least one tweet or retweet or like
@@ -59,6 +61,10 @@ class analyze:
                                 self.map_user_count[retweeter_id] += 1
                             else:
                                 self.map_user_count[retweeter_id] = 1
+                            if retweeter_id in self.map_user_response:
+                                self.map_user_response[retweeter_id] += 1
+                            else:
+                                self.map_user_response[retweeter_id] = 1
                             idx += 2
                 f.close()
         
@@ -80,14 +86,30 @@ class analyze:
                             self.map_user_count[liker_id] += 1
                         else:
                             self.map_user_count[liker_id] = 1
+                        if liker_id in self.map_user_response:
+                            self.map_user_response[liker_id] += 1
+                        else:
+                            self.map_user_response[liker_id] = 1
                 f.close()
+
+        for key, value in self.map_user_count.iteritems():
+            self.total_activity += value
+
                             
     def print_user_count(self):
         for key, value in self.map_user_count.iteritems():
             print key, value
 
-    def get_total(self):
+    def print_user_response(self):
+        for key, value in self.map_user_response.iteritems():
+            print key, value
+
+    def get_total_response(self):
         return self.total_response
 
     def get_num_active(self):
         return len(self.set_active)
+
+    def get_total_activity(self):
+        return self.total_activity
+
