@@ -792,7 +792,8 @@ class main:
             # Map from friend_id_str --> id_str of last post
             map_friend_lasttweet = {}
             for friend_id_str in list_friends:
-                tweet_list = self.observer.get_timeline(friend_id_str, n=1, verbose=0)
+                # tweet_list = self.observer.get_timeline(friend_id_str, n=1, verbose=0)
+                tweet_list = self.bots[bot_id_timeline].get_timeline(friend_id_str, n=1)
                 if len(tweet_list) != 0:
                     map_friend_lasttweet[friend_id_str] = tweet_list[0].id_str
                 else:
