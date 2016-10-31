@@ -5,14 +5,18 @@ import subprocess
 
 class analyze:
 
-    def __init__(self, dir_name):
+    def __init__(self, choice=0):
         self.set_active = set() # set of people who took at least one measurable action
         self.map_user_count = {}
         self.map_user_response = {}
         self.total_response = 0
         self.total_activity = 0
-        self.dir_name = "/home/t3500/devdata/rlbot_data_highfrequency"
-        # self.dir_name = dir_name
+        self.map_follower_map_friend_list = {}
+        self.set_friends = set()
+        if choice == 0:
+            self.dir_name = "/home/t3500/devdata/rlbot_data_highfrequency"
+        elif choice == 1:
+            self.dir_name = "/home/t3500/devdata/rlbot_data_secondorder"
 
     def calc_activity(self):
         """
@@ -95,6 +99,33 @@ class analyze:
         for key, value in self.map_user_count.iteritems():
             self.total_activity += value
 
+    def calc_friends(self):
+        """
+        For each follower, parse the file "friends_of_<follower-id>.csv"
+        Create map from follower_id to map from friend_id to list of 
+        (tweet_id, time) pairs
+        """
+        for filename in os.listdir(self.dir_name):
+            if fnmatch.fnmatch(filename, 'friends_of_*.csv'):
+                follower_id = filename.split('_')[2].split('.')[0]
+                map_friend_list = {}
+                path_to_file = self.dir_name + "/" + filename
+                f = open(path_to_file, 'r')
+                f.readline() # skip the first line
+                for line in f:
+                    line_split = line.split(',')
+                    friend_id = line_split[0]
+                    tweet_id = line_split[1]
+                    tweet_time = line_split[2]
+                    pair = (tweet_id, tweet_time)
+                    self.set_friends.add(friend_id)
+                    if friend_id in map_friend_list:
+                        map_friend_list[friend_id].append( pair )
+                    else:
+                        map_friend_list[friend_id] = [ pair ]
+                
+                self.map_follower_map_friend_list[follower_id] = map_friend_list
+                f.close()
                             
     def print_user_count(self):
         for key, value in self.map_user_count.iteritems():
@@ -113,3 +144,7 @@ class analyze:
     def get_total_activity(self):
         return self.total_activity
 
+    def get_total_friends(self):
+        return len(self.set_friends)
+
+    
