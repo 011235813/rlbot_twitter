@@ -650,9 +650,8 @@ class main:
             map_tweet_retweeter = self.observer.get_retweets( list_tweet_id )
             f = open("%s/retweeters_%s.csv" % (self.path, follower_id), "a")
             # Write to retweeters_*.csv
-            for tweet_id_str in list_tweet_id[::-1]:
+            for tweet_id_str, list_retweeter_info in map_tweet_retweeter.iteritems():
                 s = "%s," % tweet_id_str
-                list_retweeter_info = map_tweet_retweeter[tweet_id_str]
                 for retweeter in list_retweeter_info:
                     retweeter_id_str = retweeter[0]
                     retweeter_datetime = retweeter[1].strftime('%Y-%m-%d-%H-%M-%S')

@@ -657,7 +657,7 @@ class rlbot:
                                                                     date.year, date.hour,
                                                                     date.minute, date.second)
                             print "Text of retweet: %s" % retweet.text
-                                    # Store list of tuples into dictionary, associated with the ID
+                    # Store list of tuples into dictionary, associated with the ID
                     # of the original tweet
                     return_dic[tweet_id] = tuple_list
                     done_inner = 1
