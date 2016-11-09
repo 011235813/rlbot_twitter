@@ -2,6 +2,7 @@ import os
 import re
 import fnmatch
 import subprocess
+import rlbot
 
 class analyze:
 
@@ -126,6 +127,80 @@ class analyze:
                 
                 self.map_follower_map_friend_list[follower_id] = map_friend_list
                 f.close()
+                
+    def consolidate(self, outfile):
+        """
+        Combine information from records_{0-4}.csv, retweeters_{0-4}.csv
+        and likers_{0-4}.csv to produce a single tab-separated output data file
+        """
+        # Everything gets store here first, then will be sorted by time
+        # and then written into the final file
+        list_combined = []
+        # Need to instantiate bot to retrieve tweets that the bots posted
+        bot = rlbot.rlbot('username124816','keys.txt')
+
+        for bot_id in range(0,5):
+            print "Parsing for bot %d" % bot_id
+            with open(self.dir_name + '/records_%d.csv' % bot_id) as f:
+                records = [line.strip('\n').split(',') for line in f.readlines()]
+            # Remove the header row
+            del records[0]
+            records.sort()
+            with open(self.dir_name + '/retweeters_%d.csv' % bot_id) as f:
+                retweeters = [line.strip('\n').split(',') for line in f.readlines()]
+            retweeters.sort()
+            with open(self.dir_name + '/likers_%d.csv' % bot_id) as f:
+                likers = [line.strip('\n').split(',') for line in f.readlines()]
+            likers.sort()
+
+            num_rows = len(records)
+            if (len(retweeters) != num_rows):
+                print "Number of rows in records and retweeters do not match"
+            elif (len(likers) != num_rows):
+                print "Number of rows in records and likers do not match"
+
+            # List of ID of tweets posted by bot
+            list_tweet_ids = [ line[0] for line in records ]
+            # List of tweet contents (text)
+            list_tweets = bot.get_tweets(list_tweet_ids)
+            list_pair_id_text = [ (tweet.id_str, tweet.text) for tweet in list_tweets ]
+            list_pair_id_text.sort()
+
+            for idx in range(0, num_rows):
+                row = records[idx]
+                tweet_id_str = row[0]
+                pair = list_pair_id_text[idx]
+                if tweet_id_str != pair[0]:
+                    print "Tweet id mismatch!"
+                    break
+                else:
+                    # Insert the text of tweet into the row
+                    row.insert(1, pair[1].replace("\n", " "))
+
+                # Insert bot id into first column
+                row.insert(0, "%s" % bot_id)
+
+                if retweeters[idx][0] != tweet_id_str:
+                    print "Tweet id mismatch with retweeters!"
+                    break
+                else:
+                    # Skip over the tweet id and final empty string
+                    row = row + retweeters[idx][1:-1]
+                if likers[idx][0] != tweet_id_str:
+                    print "Tweet id mismatch with likers!"
+                    break
+                else:
+                    # Skip over the tweet id and final empty string
+                    row = row + likers[idx][1:-1]
+                list_combined.append( row )
+        # Sort by time of post
+        list_combined.sort(key=lambda x: x[3])
+        f = open(self.dir_name + "/%s" % outfile, 'w')
+        for row in list_combined:
+            str_row = "\t".join(row) + "\n"
+            f.write(str_row.encode('utf8'))
+        f.close()
+
                             
     def print_user_count(self):
         for key, value in self.map_user_count.iteritems():

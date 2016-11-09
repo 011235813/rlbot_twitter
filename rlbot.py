@@ -314,6 +314,44 @@ class rlbot:
             for follower in list_follower:
                 self.tracking.add(follower)
 
+
+    def get_tweets(self, list_id):
+        """
+        Given an ordered list of tweet IDs, returns ordered list of 
+        tweet objects
+        
+        Argument:
+        1. list_id - ordered list of tweet IDs
+        Returns: 
+        1. list of tweet objects
+                        
+        Note
+        1. api.statuses_lookup takes in a list of max length 100        
+        """
+        list_tweets = []
+        idx_start = 0
+        total = len(list_id)
+        idx_end = min(idx_start+100, total)
+        while idx_start != total:
+            if ( self.remaining['status_lookup'] != 0 ):
+                try:
+                    tweet_list = self.api.statuses_lookup(list_id[idx_start:idx_end])
+                    self.remaining['status_lookup'] -= 1
+                    # Store into the final output list
+                    list_tweets = list_tweets + tweet_list
+                    # Update list boundaries
+                    idx_start = idx_end
+                    idx_end = min(idx_start+100, total)
+                except tweepy.RateLimitError:
+                    print "%s get_tweets() rate limit error" % self.name
+                    self.wait_limit_reset('status_lookup')
+                except tweepy.TweepError:
+                    return list_tweets
+            else:
+                self.wait_limit_reset('status_lookup')
+                
+        return list_tweets
+
         
     def get_num_like_retweet(self, list_id):
         """
