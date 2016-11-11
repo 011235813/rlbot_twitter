@@ -517,6 +517,9 @@ class rlbot:
                     self.wait_limit_reset('timeline')
                 except tweepy.TweepError:
                     return tweet_list
+                except Exception as e:
+                    print userid
+                    print e
             else:
                 self.wait_limit_reset('timeline')
 
@@ -582,8 +585,12 @@ class rlbot:
                     self.remaining['search'] -= 1
                     tweet_list.extend(tweets)
                     # starting point of next acquisition
-                    last = tweet_list[-1].id - 1
+                    if len(tweet_list) != 0:
+                        last = tweet_list[-1].id - 1
                     done = 1
+                except tweepy.RateLimitError:
+                    print "%s get_by_hashtag() rate limit error" % self.name
+                    self.wait_limit_reset('search')
                 except tweepy.TweepError:
                     return tweet_list
             else:
@@ -607,6 +614,9 @@ class rlbot:
                         tweet_list.extend(tweets)
                         last = tweet_list[-1].id - 1
                         done = 1
+                    except tweepy.RateLimitError:
+                        print "%s get_by_hashtag() rate limit error" % self.name
+                        self.wait_limit_reset('search')
                     except tweepy.TweepError:
                         return tweet_list
                 else:

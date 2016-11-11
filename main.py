@@ -189,7 +189,10 @@ class main:
             idx_source = random.choice( list_options_source )
             source_name = self.list_source[idx_source]
             # Get the 5 most recent posts by the source
-            source_timeline = self.bots[bot_id].get_timeline(source_name, 5)
+            if "#" in source_name:
+                source_timeline = self.bots[bot_id].get_by_hashtag(source_name, 5)
+            else:
+                source_timeline = self.bots[bot_id].get_timeline(source_name, 5)
     
             num = len(source_timeline)
             done_inner = 0
@@ -315,7 +318,12 @@ class main:
                 id_str_mine = id_str_prev
                 break
             # Get most recent tweet
-            id_str_mine = self.bots[bot_id].get_timeline(self.bots[bot_id].name, n=1)[0].id_str
+            try:
+                id_str_mine = self.bots[bot_id].get_timeline(self.bots[bot_id].name, n=1)[0].id_str
+            except Exception as e:
+                print "Bot %d: unexplainable error " % bot_id, e
+                id_str_mine = id_str_prev
+                break
             if id_str_mine != id_str_prev:
                 # Most recent tweet changed, meaning the new tweet was successful
                 done = 1

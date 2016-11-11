@@ -7,12 +7,22 @@ import rlbot
 class analyze:
 
     def __init__(self, choice=0):
-        self.set_active = set() # set of people who took at least one measurable action
+        # Subset of followers who took at least one measurable action within the entire
+        # duration
+        self.set_active = set() 
+        # Subset of followers who responded at least once to the bot's posts
+        self.set_active_response = set()
+        # Map from follower ID to count of the number of tweets they made
         self.map_user_count = {}
+        # Map from follower ID to count of the number of responses to the bot
         self.map_user_response = {}
+        # Sum of response (likes and retweets) to bots' posts, over all followers
         self.total_response = 0
+        # Total number of tweets (not limited to retweet of bots' posts) made by all followers
         self.total_activity = 0
+        # Map from follower ID to map from friend ID to list of (tweet ID, tweet time) pairs
         self.map_follower_map_friend_list = {}
+        # Set of all friends of followers of bots
         self.set_friends = set()
         if choice == 0:
             self.dir_name = "/home/t3500/devdata/rlbot_data_highfrequency"
@@ -61,11 +71,12 @@ class analyze:
                             self.total_response += 1
                             # Extract all odd elements
                             retweeter_id = list_retweeter_time[idx]
+                            self.set_active_response.add(retweeter_id)
                             self.set_active.add(retweeter_id)
-                            if retweeter_id in self.map_user_count:
-                                self.map_user_count[retweeter_id] += 1
-                            else:
-                                self.map_user_count[retweeter_id] = 1
+#                            if retweeter_id in self.map_user_count:
+#                                self.map_user_count[retweeter_id] += 1
+#                            else:
+#                                self.map_user_count[retweeter_id] = 1
                             if retweeter_id in self.map_user_response:
                                 self.map_user_response[retweeter_id] += 1
                             else:
@@ -86,11 +97,12 @@ class analyze:
                     list_likers = line.split(',')[1:-1]
                     for liker_id in list_likers:
                         self.total_response += 1
+                        self.set_active_response.add(liker_id)
                         self.set_active.add(liker_id)
-                        if liker_id in self.map_user_count:
-                            self.map_user_count[liker_id] += 1
-                        else:
-                            self.map_user_count[liker_id] = 1
+#                        if liker_id in self.map_user_count:
+#                            self.map_user_count[liker_id] += 1
+#                        else:
+#                            self.map_user_count[liker_id] = 1
                         if liker_id in self.map_user_response:
                             self.map_user_response[liker_id] += 1
                         else:
@@ -215,6 +227,9 @@ class analyze:
 
     def get_num_active(self):
         return len(self.set_active)
+
+    def get_num_active_response(self):
+        return len(self.set_active_response)
 
     def get_total_activity(self):
         return self.total_activity
