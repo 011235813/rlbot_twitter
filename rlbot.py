@@ -246,6 +246,9 @@ class rlbot:
                     followers = self.api.followers_ids(userid, stringify_ids=True)
                     self.remaining['followers'] -= 1
                     done = 1
+                except tweepy.RateLimitError:
+                    print "%s get_followers() rate limit error" % self.name
+                    self.wait_limit_reset('followers')
                 except tweepy.TweepError:
                     return followers
             else:
@@ -844,6 +847,26 @@ class rlbot:
                 done = 1
             else:
                 self.wait_limit_reset('update')
+
+
+    def follow(self, list_of_ids):
+        """
+        Follows all accounts in list_of_ids.
+        Rate limit is 1000/day, which is 41/hour, which requires waiting
+        90seconds between each follow
+        """
+        for id in list_of_ids:
+            try:
+                self.api.create_friendship(id)
+                time.sleep(90)
+            except tweepy.RateLimitError:
+                print "%s follow() rate limit error" % self.name
+                time.sleep(90)
+            except tweepy.TweepError as err:
+                print "%s follow() error: " % self.name, err
+            except Exception as e:
+                print userid
+                print e
 
 
     def monitor(self, id_list, duration, period):

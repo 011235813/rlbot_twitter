@@ -112,7 +112,37 @@ class main:
         for line in lines:
             self.list_source.append( line.strip() )
   
-    
+
+    def follow(self, sourcefile):
+        """
+        Each bot follows 1/5 of the people in sourcefile
+        Argument
+        sourcefile - each line is a user_id_string
+        """
+        f = open(sourcefile, 'r')
+        list_ids = f.readlines()
+        f.close()
+        num_ids = len(list_ids)
+        
+        # Randomize the list
+        for idx in range(0, num_ids-1):
+            temp = list_ids[idx]
+            # Pick random index from the rest of the list
+            random_idx = random.randint(idx+1, num_ids-1)
+            # Swap
+            list_ids[idx] = list_ids[random_idx]
+            list_ids[random_idx] = temp
+
+        num_each_bot = int(num_ids/5)
+        idx_start = 0
+        idx_end = idx_start + num_each_bot
+        for bot_id in range(0,5):
+            print "Bot %d is following people" % bot_id
+            self.bots[bot_id].follow(list_ids[idx_start:idx_end])
+            idx_start = idx_end
+            idx_end = idx_start + num_each_bot
+
+
     def observe_num_like_retweet(self, bot_id, tweet_id_str):
         """ 
         Argument:
