@@ -133,14 +133,21 @@ class main:
             list_ids[idx] = list_ids[random_idx]
             list_ids[random_idx] = temp
 
-        num_each_bot = int(num_ids/5)
-        idx_start = 0
-        idx_end = idx_start + num_each_bot
-        for bot_id in range(0,5):
-            print "Bot %d is following people" % bot_id
-            self.bots[bot_id].follow(list_ids[idx_start:idx_end])
-            idx_start = idx_end
-            idx_end = idx_start + num_each_bot
+        idx = 0
+        while idx < num_ids-4:
+            for bot_id in range(0, 5):
+                print "Bot %d is following people" % bot_id
+                self.bots[bot_id].follow(list_ids[idx+bot_id].strip())
+            time.sleep(90)
+            idx += 5
+#        num_each_bot = int(num_ids/5)
+#        idx_start = 0
+#        idx_end = idx_start + num_each_bot
+#        for bot_id in range(0,5):
+#            print "Bot %d is following people" % bot_id
+#            self.bots[bot_id].follow(list_ids[idx_start:idx_end])
+#            idx_start = idx_end
+#            idx_end = idx_start + num_each_bot
 
 
     def observe_num_like_retweet(self, bot_id, tweet_id_str):
