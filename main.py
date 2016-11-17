@@ -113,41 +113,64 @@ class main:
             self.list_source.append( line.strip() )
   
 
-    def follow(self, sourcefile):
+    def follow(self, sourcefile, followingfile, randomize=0):
         """
         Each bot follows 1/5 of the people in sourcefile
         Argument
         sourcefile - each line is a user_id_string
+        followingfile - each line is a user_id already followed by a bot
         """
+
+        f = open(followingfile, 'r')
+        list_already_followed = f.readlines()
+        f.close()
+
         f = open(sourcefile, 'r')
         list_ids = f.readlines()
         f.close()
         num_ids = len(list_ids)
         
-        # Randomize the list
-        for idx in range(0, num_ids-1):
-            temp = list_ids[idx]
-            # Pick random index from the rest of the list
-            random_idx = random.randint(idx+1, num_ids-1)
-            # Swap
-            list_ids[idx] = list_ids[random_idx]
-            list_ids[random_idx] = temp
+        if randomize:
+            # Randomize the list
+            for idx in range(0, num_ids-1):
+                temp = list_ids[idx]
+                # Pick random index from the rest of the list
+                random_idx = random.randint(idx+1, num_ids-1)
+                # Swap
+                list_ids[idx] = list_ids[random_idx]
+                list_ids[random_idx] = temp
 
+        # Limit is max 5000 friends per bot. Use 1000 for safety
+        # Limit on how many more people can be followed by each bot
+        list_limit = [0 for bot_id in range(0,5)]
+        for bot_id in range(0, 5):
+            list_limit[bot_id] = 1000 - self.bots[bot_id].user.friends_count
+
+        # Counter for each bot
+        list_count = [0 for bot_id in range(0, 5)]
         idx = 0
         while idx < num_ids-4:
+            if list_count == list_limit:
+                break
+            # File to write the all the new people being followed
+            f = open('list_new_friends.txt','a')
             for bot_id in range(0, 5):
-                print "Bot %d is following people" % bot_id
-                self.bots[bot_id].follow(list_ids[idx+bot_id].strip())
-            time.sleep(90)
+                # Skip over bot if already reached limit
+                if list_count[bot_id] > list_limit[bot_id]:
+                    continue
+                uid = list_ids[idx+bot_id]
+                if uid not in list_already_followed:
+                    print "%d: Bot %d is following %s" % (idx+bot_id, bot_id, uid.strip())
+                    error_code = self.bots[bot_id].follow(uid.strip())
+                    list_count[bot_id] += 1
+                    f.write(uid)
+                    if error_code == 1:
+                        f.close()
+                        return
+            f.close()
+            print "Sleep for 15min"
+            time.sleep(15*60)
             idx += 5
-#        num_each_bot = int(num_ids/5)
-#        idx_start = 0
-#        idx_end = idx_start + num_each_bot
-#        for bot_id in range(0,5):
-#            print "Bot %d is following people" % bot_id
-#            self.bots[bot_id].follow(list_ids[idx_start:idx_end])
-#            idx_start = idx_end
-#            idx_end = idx_start + num_each_bot
 
 
     def observe_num_like_retweet(self, bot_id, tweet_id_str):
@@ -653,6 +676,12 @@ class main:
         """
 
         num_posts = 0 # count the total actions taken by all followers
+        accum = 0 # running sum of number of tweets
+        counter = 0 # print running sum for at every multiple of 50
+        # Map from follower_id to count of how many tweets they made
+        # For diagnosing which follower is responsible for having too many tweets
+        # and making the program take too long
+        map_follower_count = {} 
 
         for follower_id in list_to_track:
             last_tweet = map_follower_lasttweet[follower_id]
@@ -681,6 +710,16 @@ class main:
             f.close()
 
             list_tweet_id = [tweet.id_str for tweet in tweets]
+            
+            # Diagnosis
+            map_follower_count[follower_id] = len(list_tweet_id)
+            accum += len(list_tweet_id)
+            counter += 1
+            if counter % 50 == 0:
+                culprit = max(map_follower_count.iteritems(), key=itemgetter(1))[0]
+                num = max(map_follower_count.iteritems(), key=itemgetter(1))[1]
+                print "observe_follower_detail() counter %d, accum %d" % (counter, accum)
+                print "Max: follower %s has %d tweets" % (culprit, num)
             
             # Write to likers_*.csv
             f = open("%s/likers_%s.csv" % (self.path, follower_id), "a")

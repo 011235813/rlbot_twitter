@@ -117,17 +117,17 @@ class rlbot:
         elif choice == "friends":
             return friends['/friends/ids']['remaining'] # lim 15/15min
         elif choice == "user":
-            return users['/users/show/:id']['remaining'] # lim 180/15min
+            return users['/users/show/:id']['remaining'] # lim 900/15min
         elif choice == "timeline":
-            return statuses['/statuses/user_timeline']['remaining'] # lim 180/15min
+            return statuses['/statuses/user_timeline']['remaining'] # lim 900/15min
         elif choice == "status_lookup":
-            return statuses['/statuses/lookup']['remaining'] # lim 180/15min
+            return statuses['/statuses/lookup']['remaining'] # lim 900/15min
         elif choice == "search":
             return search['/search/tweets']['remaining'] # lim 180/15min
         elif choice == "retweets":
-            return statuses['/statuses/retweets/:id']['remaining'] # 60/15min
+            return statuses['/statuses/retweets/:id']['remaining'] # 75/15min
         elif choice == "retweets_of_me":
-            return statuses['/statuses/retweets_of_me']['remaining'] # 15/15min
+            return statuses['/statuses/retweets_of_me']['remaining'] # 75/15min
         else:
             return 0
 
@@ -162,17 +162,17 @@ class rlbot:
         elif choice == "friends":
             return friends['/friends/ids']['reset'] # lim 15/15min
         elif choice == "user":
-            return users['/users/show/:id']['reset'] # lim 180/15min
+            return users['/users/show/:id']['reset'] # lim 900/15min
         elif choice == "timeline":
-            return statuses['/statuses/user_timeline']['reset'] # lim 180/15min
+            return statuses['/statuses/user_timeline']['reset'] # lim 900/15min
         elif choice == "status_lookup":
-            return statuses['/statuses/lookup']['reset'] # lim 180/15min
+            return statuses['/statuses/lookup']['reset'] # lim 900/15min
         elif choice == "search":
             return search['/search/tweets']['reset'] # lim 180/15min
         elif choice == "retweets":
-            return statuses['/statuses/retweets/:id']['reset'] # 60/15min
+            return statuses['/statuses/retweets/:id']['reset'] # 75/15min
         elif choice == "retweets_of_me":
-            return statuses['/statuses/retweets_of_me']['reset'] # 15/15min
+            return statuses['/statuses/retweets_of_me']['reset'] # 75/15min
         else:
             return (time.time() + 5*60)
 
@@ -854,22 +854,30 @@ class rlbot:
         Follows all accounts in list_of_ids.
         Rate limit is 1000/day, which is 41/hour, which requires waiting
         90seconds between each follow
+
+        Return code: 1 if error, else 0
         """
         done = 0
         while done == 0:
             try:
                 self.api.create_friendship(id)
                 done = 1
+                return 0
             except tweepy.RateLimitError:
                 print "%s follow() rate limit error" % self.name
                 time.sleep(90)
             except tweepy.TweepError as err:
                 print "%s follow() error: " % self.name, err
-                break
+                if err[0]['code'] == 108:
+                    # could not find specified user, ignore and proceed
+                    return 0
+                elif err[0]['code'] == 326:
+                    # account temporarily locked
+                    return 1
             except Exception as e:
                 print userid
                 print e
-                break
+                return 1
 
 
     def monitor(self, id_list, duration, period):
