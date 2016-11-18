@@ -225,7 +225,6 @@ class rlbot:
                 time.sleep(60)
 
 
-
     def get_followers(self, userid=None, verbose=0):
         """
         Gets all followers of the specified user and returns list of IDs
@@ -650,9 +649,11 @@ class rlbot:
             found_ids = re.findall(r'data-user-id=\\"+\d+', json_data)
             unique_ids = list(set([re.findall(r'\d+', match)[0] for match in found_ids]))
             return unique_ids
-        except urllib2.HTTPError:   
+        except urllib2.HTTPError as err:
+            print "%s get_likers() error: " % self.name, err
             return []
         except:
+            print "%s get_likers() error: " % self.name
             return []
 
 
@@ -717,6 +718,63 @@ class rlbot:
 
             
         return return_dic
+
+
+    def get_retweets_single(self, tweet_id, verbose=0):
+        """
+        Get retweets of the given tweet
+        
+        Argument:
+        tweet_id - id_str of tweet
+        verbose - optionally prints details of the users who retweeted
+        
+        Return: 
+        1. list of tuples. Each tuple within the list is 
+        ( retweeter id_str, datetime of retweet )
+                        
+        Limitation: only returns 100 of the first retweets of the given tweet
+        """
+
+        # Create list to store all tuples associated with this tweet
+        list_tuples = []
+        done = 0
+        while done == 0:
+            if ( self.remaining['retweets'] != 0 ):
+                try:
+                    # up to 100 of the first retweets of the given tweet
+                    retweet_list = self.api.retweets(tweet_id, count=100, trim_user=True)
+                    self.remaining['retweets'] -= 1
+                except tweepy.RateLimitError:
+                    print "%s get_retweets_single() rate limit error" % self.name
+                    self.wait_limit_reset('retweets')
+                    continue
+                except tweepy.TweepError as err:
+                    print "Error in rlbot.get_retweets_single(): ", err
+                    return list_tuples
+                except Exception as e:
+                    print tweet_id
+                    print e
+                
+                for retweet in retweet_list:
+                    retweeter_id_str = retweet.user.id_str
+                    # retweet.created_at is UTC time, which is 4 hours ahead of EST
+                    date = retweet.created_at + datetime.timedelta(hours=-4)
+                                        
+                    # Create tuple containing details of the retweet
+                    # and store into list of tuples
+                    list_tuples.append( (retweeter_id_str, date) )
+                    
+                    if verbose:
+                        print "Retweeted by user id_str: %s" % (retweeter_id_str)
+                        print "Timestamp: %d/%d/%d %d:%d:%d" % (date.month, date.day,
+                                                                date.year, date.hour,
+                                                                date.minute, date.second)
+                        print "Text of retweet: %s" % retweet.text
+                done = 1
+            else: # api.retweets reached limit
+                self.wait_limit_reset('retweets')
+            
+        return list_tuples
 
 
     def get_retweets_all(self, verbose=0):
