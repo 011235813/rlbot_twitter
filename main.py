@@ -113,17 +113,12 @@ class main:
             self.list_source.append( line.strip() )
   
 
-    def follow(self, sourcefile, followingfile, randomize=0):
+    def follow(self, sourcefile, target=350, randomize=0):
         """
         Each bot follows 1/5 of the people in sourcefile
         Argument
         sourcefile - each line is a user_id_string
-        followingfile - each line is a user_id already followed by a bot
         """
-
-        f = open(followingfile, 'r')
-        list_already_followed = f.readlines()
-        f.close()
 
         f = open(sourcefile, 'r')
         list_ids = f.readlines()
@@ -140,36 +135,46 @@ class main:
                 list_ids[idx] = list_ids[random_idx]
                 list_ids[random_idx] = temp
 
-        # Limit is max 5000 friends per bot. Use 1000 for safety
+        # Limit is max 5000 friends per bot. Use 1500 for safety
         # Limit on how many more people can be followed by each bot
         list_limit = [0 for bot_id in range(0,5)]
         for bot_id in range(0, 5):
-            list_limit[bot_id] = 1000 - self.bots[bot_id].user.friends_count
+            list_limit[bot_id] = 1500 - self.bots[bot_id].user.friends_count
 
         # Counter for each bot
         list_count = [0 for bot_id in range(0, 5)]
+        # 1 at index i indicates that bot i has enough followers
+        list_done = [0 for bot_id in range(0, 5)] 
         idx = 0
         while idx < num_ids-4:
             if list_count == list_limit:
                 break
+            if sum(list_done) == 5: # all five bots have enough followers
+                break
             # File to write the all the new people being followed
             f = open('list_new_friends.txt','a')
             for bot_id in range(0, 5):
-                # Skip over bot if already reached limit
+                followers_count = self.bots[bot_id].api.get_user('ml%d_gt' % (bot_id+1)).followers_count
+                if followers_count >= target:
+                    # Skip over bot if already has enough followers
+                    print "Bot %d already has %d followers" % (bot_id, followers_count)
+                    list_done[bot_id] = 1
+                    continue
                 if list_count[bot_id] > list_limit[bot_id]:
+                    # Skip over bot if already reached limit
+                    print "Bot %d reached limit" % (bot_id)
                     continue
                 uid = list_ids[idx+bot_id]
-                if uid not in list_already_followed:
-                    print "%d: Bot %d is following %s" % (idx+bot_id, bot_id, uid.strip())
-                    error_code = self.bots[bot_id].follow(uid.strip())
-                    list_count[bot_id] += 1
-                    f.write(uid)
-                    if error_code == 1:
-                        f.close()
-                        return
+                print "%d: Bot %d is following %s" % (idx+bot_id, bot_id, uid.strip())
+                error_code = self.bots[bot_id].follow(uid.strip())
+                list_count[bot_id] += 1
+                f.write(uid)
+                if error_code == 1:
+                    f.close()
+                    return
             f.close()
-            print "Sleep for 15min"
-            time.sleep(15*60)
+            print "Sleep for 8min"
+            time.sleep(8*60)
             idx += 5
 
 
@@ -609,15 +614,72 @@ class main:
             return 0
 
 
-    def record_network(self, list_followers, day):
+#    def record_network(self, list_followers, day):
+#        """
+#        Run once per day. Creates the connection matrix A for the set of followers
+#        of the bot.
+#        A_ij = 1 iff follower_i follows follower_j
+#        Stores results in matrix_day*.csv
+#        """
+#        
+#        # Create dictionary for efficiency
+#        map_id_index = {}
+#        count = len(list_followers)
+#        for index in range(0, count):
+#            map_id_index[ list_followers[index] ] = index
+#
+#        f = open("%s/matrix_day%d.csv" % (self.path, day), "a")
+#        # Write header
+#        s = ","
+#        for id_str in list_followers:
+#            s += "%s," % id_str
+#        s += "\n"
+#        f.write(s)
+#
+#        # Counter for get_friends() rate limit
+#        counter_friends = 0
+#        # Bot to use for get_friends(). Cyclic
+#        bot_id_friends = 0
+#
+#        # Write rows of matrix
+#        for id_str in list_followers:
+#            # Get friends of this person
+#            list_friend = self.bots[bot_id_friends].get_friends(id_str)
+#
+#            # Check whether need to switch to another bot
+#            counter_friends += 1
+#            if counter_friends == 15:
+#                bot_id_friends = (bot_id_friends + 1) % 6 # go to next bot
+#                counter_friends = 0 # reset counter
+#
+#            # Create row A_i, where A_ij = 1 iff the person with
+#            # id_str follows the person at column index j
+#            temp = [0 for x in range(0, count)]
+#            for friend_id in list_friend:
+#                if friend_id in map_id_index:
+#                    temp[ map_id_index[friend_id] ] = 1
+#            s = ','.join(map(str, temp))
+#            s = id_str + ',' + s + '\n'
+#            f.write(s)
+#
+#        f.close()
+
+    def record_network(self, map_follower_map_friend_lasttweet, day):
         """
         Run once per day. Creates the connection matrix A for the set of followers
-        of the bot.
-        A_ij = 1 iff follower_i follows follower_j
+        of the bot. A_ij = 1 iff follower_i follows follower_j
+
+        Argument:
+        map_follower_map_friend_lasttweet - map from follower_id to map from all friends
+        of that follower to the last tweet ID made by friend. No need to care about the
+        tweet ID. This double map was already computed by initialize_maps(), so 
+        the mapping from follower to all friends comes for free (no need for API calls)
+
         Stores results in matrix_day*.csv
         """
-        
-        # Create dictionary for efficiency
+        print "Inside record_network()"
+        list_followers = map_follower_map_friend_lasttweet.keys()
+        # Create map from follower ID to index for efficiency
         map_id_index = {}
         count = len(list_followers)
         for index in range(0, count):
@@ -631,28 +693,18 @@ class main:
         s += "\n"
         f.write(s)
 
-        # Counter for get_friends() rate limit
-        counter_friends = 0
-        # Bot to use for get_friends(). Cyclic
-        bot_id_friends = 0
-
         # Write rows of matrix
         for id_str in list_followers:
             # Get friends of this person
-            # list_friend = self.observer.get_friends(id_str)
-            list_friend = self.bots[bot_id_friends].get_friends(id_str)
-
-            # Check whether need to switch to another bot
-            counter_friends += 1
-            if counter_friends == 15:
-                bot_id_friends = (bot_id_friends + 1) % 6 # go to next bot
-                counter_friends = 0 # reset counter
+            # list_friend = self.bots[bot_id_friends].get_friends(id_str)
+            list_friend = map_follower_map_friend_lasttweet[id_str].keys()
 
             # Create row A_i, where A_ij = 1 iff the person with
             # id_str follows the person at column index j
             temp = [0 for x in range(0, count)]
             for friend_id in list_friend:
                 if friend_id in map_id_index:
+                    # If the friend is among the set of followers
                     temp[ map_id_index[friend_id] ] = 1
             s = ','.join(map(str, temp))
             s = id_str + ',' + s + '\n'
@@ -674,14 +726,18 @@ class main:
         2. map_follower_lasttweet - map from follower_id_str to id_str of the most recent post
         as recorded at the start of the day
         """
-
+        print "Inside observe_follower_detail()"
         num_posts = 0 # count the total actions taken by all followers
-        accum = 0 # running sum of number of tweets
+
+        # For diagnosis
         counter = 0 # print running sum for at every multiple of 50
-        # Map from follower_id to count of how many tweets they made
-        # For diagnosing which follower is responsible for having too many tweets
-        # and making the program take too long
-        map_follower_count = {} 
+        count_max = 0
+        culprit = ''
+
+        # Counter for get_retweets() rate limit
+        counter_retweets = 0
+        # Bot to use for get_retweets(). Cyclic
+        bot_id_retweets = 0
 
         for follower_id in list_to_track:
             last_tweet = map_follower_lasttweet[follower_id]
@@ -692,6 +748,20 @@ class main:
 
             num_posts += len(tweets)
 
+            # Diagnosis
+            temp = len(tweets)
+            if temp > count_max:
+                count_max = temp
+                culprit = follower_id
+            counter += 1
+            if counter % 50 == 0:
+                print "observe_follower_detail() counter %d, num_posts %d" % (counter, num_posts)
+                print "Max: follower %s has %d tweets" % (culprit, count_max)
+
+            # Ignore potential bots and spammers that post with high frequency
+            if len(tweets) > 20:
+                tweets = self.reservoir_sample(tweets, 20)
+
             # Write to records_*.csv
             path_to_file = "%s/records_%s.csv" % (self.path, follower_id)
             if os.path.isfile(path_to_file):
@@ -700,8 +770,7 @@ class main:
                 f = open(path_to_file, "a")
                 f.write("tweet_id_str,time,text,num_like,num_retweet\n")
             for tweet in tweets[::-1]:
-                # creation_time = tweet.created_at.strftime('%Y-%m-%d %H:%M:%S')
-                # The following line, not the previous line, is the correct EST datetime
+                # tweet.created_at returns UTC time, which is 4 hours ahead of EST
                 creation_time = (tweet.created_at + 
                                  datetime.timedelta(hours=-4)).strftime('%Y-%m-%d-%H:%M:%S')
                 text_mod = tweet.text.replace("\n", " ") # remove newlines
@@ -710,16 +779,6 @@ class main:
             f.close()
 
             list_tweet_id = [tweet.id_str for tweet in tweets]
-            
-            # Diagnosis
-            map_follower_count[follower_id] = len(list_tweet_id)
-            accum += len(list_tweet_id)
-            counter += 1
-            if counter % 50 == 0:
-                culprit = max(map_follower_count.iteritems(), key=itemgetter(1))[0]
-                num = max(map_follower_count.iteritems(), key=itemgetter(1))[1]
-                print "observe_follower_detail() counter %d, accum %d" % (counter, accum)
-                print "Max: follower %s has %d tweets" % (culprit, num)
             
             # Write to likers_*.csv
             f = open("%s/likers_%s.csv" % (self.path, follower_id), "a")
@@ -731,14 +790,22 @@ class main:
                 f.write(s)
             f.close()
 
-            map_tweet_retweeter = self.observer.get_retweets( list_tweet_id )
-            f = open("%s/retweeters_%s.csv" % (self.path, follower_id), "a")
+            # map_tweet_retweeter = self.observer.get_retweets( list_tweet_id )
             # Write to retweeters_*.csv
-            for tweet_id_str, list_retweeter_info in map_tweet_retweeter.iteritems():
+            f = open("%s/retweeters_%s.csv" % (self.path, follower_id), "a")
+            for tweet_id_str in list_tweet_id:
+                list_tuples = self.bots[bot_id_retweets].get_retweets_single(tweet_id_str, verbose=0)
+
+                # Check whether need to switch to another bot for get_retweets_single()
+                counter_retweets += 1
+                if counter_timeline == 75:
+                    bot_id_retweets = (bot_id_retweets + 1) % 6 # go to next bot
+                    counter_retweets = 0 # reset counter
+
                 s = "%s," % tweet_id_str
-                for retweeter in list_retweeter_info:
-                    retweeter_id_str = retweeter[0]
-                    retweeter_datetime = retweeter[1].strftime('%Y-%m-%d-%H-%M-%S')
+                for pair in list_tuples:
+                    retweeter_id_str = pair[0]
+                    retweeter_datetime = pair[1].strftime('%Y-%m-%d-%H-%M-%S')
                     s += "%s,%s," % (retweeter_id_str, retweeter_datetime)
                 s += "\n"
                 f.write(s)
@@ -760,6 +827,7 @@ class main:
         2. map_follower_map_friend_lasttweet - map from follower_id_str to map from 
         friend_id_str to id_str of the most recent post as recorded at the start of the day
         """
+        print "Inside observe_follower_friend_detail()"
         # Counter for get_timeline() rate limit
         counter_timeline = 0
         # Bot to use for get_timeline(). Cyclic
@@ -807,6 +875,7 @@ class main:
                     
             f.close()            
 
+
     def reservoir_sample(self, input_list, N):
         """
         Returns list of N randomly sampled points from input_list
@@ -821,15 +890,17 @@ class main:
                 sample[replace] = element
         return sample
 
+
     def initialize_maps(self, list_to_track):
         """
-        This function is called at the start of every day (usually sometime between 12midnight-1am)
+        This function is called at the start of every day
         Takes in list_to_track, which is the list of all followers of the bots
         Returns two maps:
         1. map_follower_lasttweet - map from follower_id to tweet_id of most recent tweet
         2. map_follower_map_friend_lasttweet - map from follower_id to map from friend_id
         to tweet_id of most recent tweet by that friend of that follower
         """
+        print "Inside initialize_maps()"
         # Map from follower_id_str --> id_str of last post
         map_follower_lasttweet = {}
         # Map from follower_id_str --> map from friend_id_str --> id_str of last post
@@ -845,7 +916,6 @@ class main:
 
         for follower_id_str in list_to_track:
             # Get the most recent post by follower_id_str
-            # tweet_list = self.observer.get_timeline(follower_id_str, n=1, verbose=0)
             tweet_list = self.bots[bot_id_timeline].get_timeline(follower_id_str, n=1)
 
             # Store most recent post by follower_id_str, if post exists
@@ -861,7 +931,6 @@ class main:
                 counter_timeline = 0 # reset counter
 
             # Get list of all friends of follower_id_str
-            # list_friends = self.observer.get_friends(follower_id_str)
             list_friends = self.bots[bot_id_friends].get_friends(follower_id_str)
             if len(list_friends) > 50:
                 list_friends = self.reservoir_sample(list_friends, 50)
@@ -875,12 +944,12 @@ class main:
             # Map from friend_id_str --> id_str of last post
             map_friend_lasttweet = {}
             for friend_id_str in list_friends:
-                # tweet_list = self.observer.get_timeline(friend_id_str, n=1, verbose=0)
                 tweet_list = self.bots[bot_id_timeline].get_timeline(friend_id_str, n=1)
                 if len(tweet_list) != 0:
                     map_friend_lasttweet[friend_id_str] = tweet_list[0].id_str
                 else:
                     map_friend_lasttweet[friend_id_str] = ''
+                # Check whether need to switch to another bot
                 counter_timeline += 1
                 if counter_timeline == 180:
                     bot_id_timeline = (bot_id_timeline + 1) % 6 # go to next bot
@@ -919,19 +988,25 @@ class main:
             # Reset number of posts made during day
             num_post = 0
 
-            # At start of this day, update the set of people to track
+            # At start of this day, update the set of people to track,
+            # which comprises all followers of the five bots
             self.observer.update_tracking( ['ml%d_gt' % idx for idx in range(1,5+1)] )
             list_to_track = list(self.observer.tracking)
             list_to_track.sort()
 
+            # Generates mappings to store the latest tweets by all followers and friends
+            # of followers. Will be used at end of day as reference point to
+            # find all new tweets made by these people during the day
             map_follower_lasttweet, map_follower_map_friend_lasttweet = self.initialize_maps(list_to_track)
+
+            # Record connectivity matrix
+            self.record_network(map_follower_map_friend_lasttweet, num_day)
 
             now = datetime.datetime.now()
         
             # At the start of each day, generate the entire set of action times
             # for all bots
             self.generate_post_time_random( (8,0,0), (23,0,0), 5 )
-            # self.generate_post_time_random( (8,0,0), (22,30,0), 1 )
 
             # NOTE: this method of putting action events into the queue all at once is only
             # correct for the version of the system that does not use the algorithm
@@ -984,7 +1059,7 @@ class main:
             time.sleep(sec_until_tomorrow + 10)
             
             # Record connectivity matrix
-            self.record_network(list_to_track, num_day)
+            # self.record_network(list_to_track, num_day)
                         
             # Record follower details
             self.observe_follower_detail(list_to_track, map_follower_lasttweet)
