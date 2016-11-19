@@ -544,49 +544,6 @@ class main:
         # Placeholder of 1 hours 0 minutes and 0 seconds
         return (1,0,0)
 
-
-#    def calc_observation_time(self, map_bot_action_seq):
-#        """
-#        Given mapping from bot to list of action times, returns mapping from
-#        bot to list of observation times
-#        """
-#        wait_time = self.get_wait_time()
-#        
-#        map_bot_observe_seq = {}
-#        keys = map_bot_action_seq.keys()
-#        
-#        for bot_id in keys:
-#
-#            action_seq = map_bot_action_seq[bot_id]
-#            observe_seq = []
-#
-#            for t_action in action_seq:
-#                # Merely using the addition capability of the datetime package
-#                datetime_action = datetime.datetime(2016,1,1,t_action[0],t_action[1],t_action[2])
-#                datetime_observe = datetime_action + \
-#                                    datetime.timedelta(hours=wait_time[0], minutes=wait_time[1], seconds=wait_time[2])
-#                observe_seq.append( (datetime_observe.hour, datetime_observe.minute, datetime_observe.second) )
-#            
-#            map_bot_observe_seq[bot_id] = observe_seq
-#            
-#        return map_bot_observe_seq
-
-
-#    def serialize(self, mapping, map_type='a'):
-#        """
-#        Given mapping from bot_id to list of time tuples, returns a list
-#        L = [ (time tuple 1, bot 1, map_type), ... , (time tuple T, bot N, map_type) ]
-#        """
-#        
-#        to_return = []
-#        keys = mapping.keys()
-#        
-#        for bot_id in keys:
-#            time_sequence = mapping[bot_id]
-#            for t_tuple in time_sequence:
-#                to_return.append( (t_tuple, bot_id, map_type) )
-#
-#        return to_return
                 
     def is_after_now(self, now, time_tuple):
         """
