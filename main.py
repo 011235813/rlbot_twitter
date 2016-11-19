@@ -755,7 +755,7 @@ class main:
 
                 # Check whether need to switch to another bot for get_retweets_single()
                 counter_retweets += 1
-                if counter_timeline == 75:
+                if counter_retweets == 75:
                     bot_id_retweets = (bot_id_retweets + 1) % 6 # go to next bot
                     counter_retweets = 0 # reset counter
 
