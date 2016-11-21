@@ -926,10 +926,10 @@ class rlbot:
                 time.sleep(90)
             except tweepy.TweepError as err:
                 print "%s follow() error: " % self.name, err
-                if err[0]['code'] == 108:
+                if err[0][0]['code'] == 108:
                     # could not find specified user, ignore and proceed
                     return 0
-                elif err[0]['code'] == 326:
+                elif err[0][0]['code'] == 326:
                     # account temporarily locked
                     return 1
             except Exception as e:
