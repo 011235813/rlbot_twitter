@@ -20,13 +20,13 @@ import os
 class main:
 
     def __init__(self, init_bots=1, init_observer=1, sourcefile='source.txt', 
-                 logfile='/home/t3500/devdata/rlbot_data/log.txt'):
+                 logfile='log.txt'):
         
-        self.logfilename = logfile
 #        self.path = '/home/t3500/devdata/rlbot_data'
 #        self.path = '/home/t3500/devdata/rlbot_data_course'
 #        self.path = '/home/t3500/devdata/rlbot_data_highfrequency'
         self.path = '/home/t3500/devdata/rlbot_data_secondorder'
+        self.logfilename = self.path + '/' + logfile
 
         # List of bots
         self.bots = []
@@ -571,71 +571,13 @@ class main:
             return 0
 
 
-#    def record_network(self, list_followers, day):
-#        """
-#        Run once per day. Creates the connection matrix A for the set of followers
-#        of the bot.
-#        A_ij = 1 iff follower_i follows follower_j
-#        Stores results in matrix_day*.csv
-#        """
-#        
-#        # Create dictionary for efficiency
-#        map_id_index = {}
-#        count = len(list_followers)
-#        for index in range(0, count):
-#            map_id_index[ list_followers[index] ] = index
-#
-#        f = open("%s/matrix_day%d.csv" % (self.path, day), "a")
-#        # Write header
-#        s = ","
-#        for id_str in list_followers:
-#            s += "%s," % id_str
-#        s += "\n"
-#        f.write(s)
-#
-#        # Counter for get_friends() rate limit
-#        counter_friends = 0
-#        # Bot to use for get_friends(). Cyclic
-#        bot_id_friends = 0
-#
-#        # Write rows of matrix
-#        for id_str in list_followers:
-#            # Get friends of this person
-#            list_friend = self.bots[bot_id_friends].get_friends(id_str)
-#
-#            # Check whether need to switch to another bot
-#            counter_friends += 1
-#            if counter_friends == 15:
-#                bot_id_friends = (bot_id_friends + 1) % 6 # go to next bot
-#                counter_friends = 0 # reset counter
-#
-#            # Create row A_i, where A_ij = 1 iff the person with
-#            # id_str follows the person at column index j
-#            temp = [0 for x in range(0, count)]
-#            for friend_id in list_friend:
-#                if friend_id in map_id_index:
-#                    temp[ map_id_index[friend_id] ] = 1
-#            s = ','.join(map(str, temp))
-#            s = id_str + ',' + s + '\n'
-#            f.write(s)
-#
-#        f.close()
-
-    def record_network(self, map_follower_map_friend_lasttweet, day):
+    def record_network(self, list_followers, day):
         """
         Run once per day. Creates the connection matrix A for the set of followers
         of the bot. A_ij = 1 iff follower_i follows follower_j
-
-        Argument:
-        map_follower_map_friend_lasttweet - map from follower_id to map from all friends
-        of that follower to the last tweet ID made by friend. No need to care about the
-        tweet ID. This double map was already computed by initialize_maps(), so 
-        the mapping from follower to all friends comes for free (no need for API calls)
-
         Stores results in matrix_day*.csv
         """
         print "Inside record_network()"
-        list_followers = map_follower_map_friend_lasttweet.keys()
         # Create map from follower ID to index for efficiency
         map_id_index = {}
         count = len(list_followers)
@@ -650,24 +592,81 @@ class main:
         s += "\n"
         f.write(s)
 
+        # Counter for get_friends() rate limit
+        counter_friends = 0
+        # Bot to use for get_friends(). Cyclic
+        bot_id_friends = 0
+
         # Write rows of matrix
         for id_str in list_followers:
             # Get friends of this person
-            # list_friend = self.bots[bot_id_friends].get_friends(id_str)
-            list_friend = map_follower_map_friend_lasttweet[id_str].keys()
+            list_friend = self.bots[bot_id_friends].get_friends(id_str)
+
+            # Check whether need to switch to another bot
+            counter_friends += 1
+            if counter_friends == 15:
+                bot_id_friends = (bot_id_friends + 1) % 6 # go to next bot
+                counter_friends = 0 # reset counter
 
             # Create row A_i, where A_ij = 1 iff the person with
             # id_str follows the person at column index j
             temp = [0 for x in range(0, count)]
             for friend_id in list_friend:
                 if friend_id in map_id_index:
-                    # If the friend is among the set of followers
                     temp[ map_id_index[friend_id] ] = 1
             s = ','.join(map(str, temp))
             s = id_str + ',' + s + '\n'
             f.write(s)
 
         f.close()
+
+#    def record_network(self, map_follower_map_friend_lasttweet, day):
+#        """
+#        Run once per day. Creates the connection matrix A for the set of followers
+#        of the bot. A_ij = 1 iff follower_i follows follower_j
+#
+#        Argument:
+#        map_follower_map_friend_lasttweet - map from follower_id to map from all friends
+#        of that follower to the last tweet ID made by friend. No need to care about the
+#        tweet ID. This double map was already computed by initialize_maps(), so 
+#        the mapping from follower to all friends comes for free (no need for API calls)
+#
+#        Stores results in matrix_day*.csv
+#        """
+#        print "Inside record_network()"
+#        list_followers = map_follower_map_friend_lasttweet.keys()
+#        # Create map from follower ID to index for efficiency
+#        map_id_index = {}
+#        count = len(list_followers)
+#        for index in range(0, count):
+#            map_id_index[ list_followers[index] ] = index
+#
+#        f = open("%s/matrix_day%d.csv" % (self.path, day), "a")
+#        # Write header
+#        s = ","
+#        for id_str in list_followers:
+#            s += "%s," % id_str
+#        s += "\n"
+#        f.write(s)
+#
+#        # Write rows of matrix
+#        for id_str in list_followers:
+#            # Get friends of this person
+#            # list_friend = self.bots[bot_id_friends].get_friends(id_str)
+#            list_friend = map_follower_map_friend_lasttweet[id_str].keys()
+#
+#            # Create row A_i, where A_ij = 1 iff the person with
+#            # id_str follows the person at column index j
+#            temp = [0 for x in range(0, count)]
+#            for friend_id in list_friend:
+#                if friend_id in map_id_index:
+#                    # If the friend is among the set of followers
+#                    temp[ map_id_index[friend_id] ] = 1
+#            s = ','.join(map(str, temp))
+#            s = id_str + ',' + s + '\n'
+#            f.write(s)
+#
+#        f.close()
 
 
     def observe_follower_detail(self, list_to_track, map_follower_lasttweet):
@@ -957,7 +956,7 @@ class main:
             map_follower_lasttweet, map_follower_map_friend_lasttweet = self.initialize_maps(list_to_track)
 
             # Record connectivity matrix
-            self.record_network(map_follower_map_friend_lasttweet, num_day)
+            # self.record_network(map_follower_map_friend_lasttweet, num_day)
 
             now = datetime.datetime.now()
         
@@ -1016,7 +1015,7 @@ class main:
             time.sleep(sec_until_tomorrow + 10)
             
             # Record connectivity matrix
-            # self.record_network(list_to_track, num_day)
+            self.record_network(list_to_track, num_day)
                         
             # Record follower details
             self.observe_follower_detail(list_to_track, map_follower_lasttweet)
