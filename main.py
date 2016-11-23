@@ -173,8 +173,8 @@ class main:
                     f.close()
                     return
             f.close()
-            print "Sleep for 8min"
-            time.sleep(8*60)
+            print "Sleep for 5min"
+            time.sleep(5*60)
             idx += 5
 
 
