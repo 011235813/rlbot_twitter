@@ -153,7 +153,7 @@ class main:
                 break
             # File to write the all the new people being followed
             f = open('list_new_friends.txt','a')
-            for bot_id in range(0, 5):
+            for bot_id in [2, 4]:
                 followers_count = self.bots[bot_id].api.get_user('ml%d_gt' % (bot_id+1)).followers_count
                 if followers_count >= target:
                     # Skip over bot if already has enough followers
@@ -577,7 +577,7 @@ class main:
         of the bot. A_ij = 1 iff follower_i follows follower_j
         Stores results in matrix_day*.csv
         """
-        print "Inside record_network()"
+        print "Inside record_network() at ", datetime.datetime.now()
         # Create map from follower ID to index for efficiency
         map_id_index = {}
         count = len(list_followers)
@@ -682,7 +682,7 @@ class main:
         2. map_follower_lasttweet - map from follower_id_str to id_str of the most recent post
         as recorded at the start of the day
         """
-        print "Inside observe_follower_detail()"
+        print "Inside observe_follower_detail() at ", datetime.datetime.now()
         num_posts = 0 # count the total actions taken by all followers
 
         # For diagnosis
@@ -783,7 +783,7 @@ class main:
         2. map_follower_map_friend_lasttweet - map from follower_id_str to map from 
         friend_id_str to id_str of the most recent post as recorded at the start of the day
         """
-        print "Inside observe_follower_friend_detail()"
+        print "Inside observe_follower_friend_detail() at ", datetime.datetime.now()
         # Counter for get_timeline() rate limit
         counter_timeline = 0
         # Bot to use for get_timeline(). Cyclic
@@ -856,7 +856,7 @@ class main:
         2. map_follower_map_friend_lasttweet - map from follower_id to map from friend_id
         to tweet_id of most recent tweet by that friend of that follower
         """
-        print "Inside initialize_maps()"
+        print "Inside initialize_maps() at ", datetime.datetime.now()
         # Map from follower_id_str --> id_str of last post
         map_follower_lasttweet = {}
         # Map from follower_id_str --> map from friend_id_str --> id_str of last post
@@ -888,7 +888,7 @@ class main:
 
             # Get list of all friends of follower_id_str
             list_friends = self.bots[bot_id_friends].get_friends(follower_id_str)
-            if len(list_friends) > 50:
+            if len(list_friends) > 25:
                 list_friends = self.reservoir_sample(list_friends, 50)
 
             # Check whether need to switch to another bot
@@ -939,7 +939,7 @@ class main:
             f = open(self.logfilename, "a")
             f.write("\nDay %d\n" % num_day)
             f.close()
-            print "Day %d" % num_day
+            print "Day %d" % num_day, datetime.datetime.now()
         
             # Reset number of posts made during day
             num_post = 0
