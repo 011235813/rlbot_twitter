@@ -933,6 +933,8 @@ class rlbot:
                     elif err[0][0]['code'] == 326:
                         # account temporarily locked
                         return 1
+                    else:
+                        return 1
                 except:
                     return 0
             except Exception as e:
