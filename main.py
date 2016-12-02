@@ -153,7 +153,7 @@ class main:
                 break
             # File to write the all the new people being followed
             f = open('list_new_friends.txt','a')
-            for bot_id in [2, 4]:
+            for bot_id in [1, 2, 4]:
                 followers_count = self.bots[bot_id].api.get_user('ml%d_gt' % (bot_id+1)).followers_count
                 if followers_count >= target:
                     # Skip over bot if already has enough followers
@@ -888,8 +888,8 @@ class main:
 
             # Get list of all friends of follower_id_str
             list_friends = self.bots[bot_id_friends].get_friends(follower_id_str)
-            if len(list_friends) > 25:
-                list_friends = self.reservoir_sample(list_friends, 50)
+            if len(list_friends) > 20:
+                list_friends = self.reservoir_sample(list_friends, 20)
 
             # Check whether need to switch to another bot
             counter_friends += 1
