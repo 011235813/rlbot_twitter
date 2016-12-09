@@ -113,6 +113,26 @@ class main:
             self.list_source.append( line.strip() )
   
 
+    def unfollow(self, bot_id, num):
+        """
+        From bot's list of friends, randomly select num of them and unfollow
+        Argument:
+        bot_id - 0 to 4
+        num - number of friends to select and unfollow
+        """
+        list_friends = self.bots[bot_id].get_friends('ml%d_gt' % (bot_id + 1))
+        num_friends_initial = len(list_friends)
+        if num > len(list_friends):
+            print "ml%d_gt only has %d friends. Cannot unfollow %d people" % (bot_id+1, num_friends_initial, num)
+        else:
+            list_to_unfollow = self.reservoir_sample(list_friends, num)
+            for friend_id in list_to_unfollow:
+                try:
+                    self.bots[bot_id].api.destroy_friendship(friend_id)
+                except Exception as err:
+                    print err
+            
+
     def follow(self, sourcefile, target=350, randomize=0):
         """
         Each bot follows 1/5 of the people in sourcefile
@@ -658,7 +678,7 @@ class main:
             # Create row A_i, where A_ij = 1 iff the person with
             # id_str follows the person at column index j
             temp = [0 for x in range(0, count)]
-            for friend_id in list_friend:
+            for friend_id in list_friends:
                 if friend_id in map_id_index:
                     # If the friend is among the set of followers
                     temp[ map_id_index[friend_id] ] = 1
