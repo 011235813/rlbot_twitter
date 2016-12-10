@@ -133,7 +133,7 @@ class main:
                     print err
             
 
-    def follow(self, sourcefile, target=350, randomize=0):
+    def follow(self, sourcefile, target=600, randomize=0):
         """
         Each bot follows 1/5 of the people in sourcefile
         Argument
@@ -155,25 +155,25 @@ class main:
                 list_ids[idx] = list_ids[random_idx]
                 list_ids[random_idx] = temp
 
-        # Limit is max 5000 friends per bot. Use 1500 for safety
+        # Limit is max 5000 friends per bot. Use 2000 for safety
         # Limit on how many more people can be followed by each bot
         list_limit = [0 for bot_id in range(0,5)]
         for bot_id in range(0, 5):
-            list_limit[bot_id] = 1500 - self.bots[bot_id].user.friends_count
+            list_limit[bot_id] = 2000 - self.bots[bot_id].user.friends_count
 
         # Counter for each bot
         list_count = [0 for bot_id in range(0, 5)]
         # 1 at index i indicates that bot i has enough followers
         list_done = [0 for bot_id in range(0, 5)] 
         idx = 0
-        while idx < num_ids-4:
+        while idx < num_ids:
             if list_count == list_limit:
                 break
             if sum(list_done) == 5: # all five bots have enough followers
                 break
             # File to write the all the new people being followed
             f = open('list_new_friends.txt','a')
-            for bot_id in [1, 2, 4]:
+            for bot_id in range(0,5):
                 followers_count = self.bots[bot_id].api.get_user('ml%d_gt' % (bot_id+1)).followers_count
                 if followers_count >= target:
                     # Skip over bot if already has enough followers
@@ -184,8 +184,9 @@ class main:
                     # Skip over bot if already reached limit
                     print "Bot %d reached limit" % (bot_id)
                     continue
-                uid = list_ids[idx+bot_id]
-                print "%d: Bot %d is following %s" % (idx+bot_id, bot_id, uid.strip())
+                uid = list_ids[idx]
+                print "%d: Bot %d is following %s" % (idx, bot_id, uid.strip())
+                idx += 1
                 error_code = self.bots[bot_id].follow(uid.strip())
                 list_count[bot_id] += 1
                 f.write(uid)
@@ -195,7 +196,6 @@ class main:
             f.close()
             print "Sleep for 5min"
             time.sleep(5*60)
-            idx += 5
 
 
     def observe_num_like_retweet(self, bot_id, tweet_id_str):
