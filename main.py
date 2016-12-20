@@ -133,7 +133,7 @@ class main:
                     print err
             
 
-    def follow(self, sourcefile, target=600, randomize=0):
+    def follow(self, sourcefile, target=550, randomize=0):
         """
         Each bot follows 1/5 of the people in sourcefile
         Argument
@@ -194,8 +194,8 @@ class main:
                     f.close()
                     return
             f.close()
-            print "Sleep for 5min"
-            time.sleep(5*60)
+            print "Sleep for 8min"
+            time.sleep(8*60)
 
 
     def observe_num_like_retweet(self, bot_id, tweet_id_str):
@@ -914,7 +914,7 @@ class main:
             list_friends = self.bots[bot_id_friends].get_friends(follower_id_str)
             map_follower_list_friends[follower_id_str] = list_friends
             if len(list_friends) > 10:
-                list_friends = self.reservoir_sample(list_friends, 20)
+                list_friends = self.reservoir_sample(list_friends, 10)
 
             # Check whether need to switch to another bot
             counter_friends += 1
@@ -938,6 +938,7 @@ class main:
 
             map_follower_map_friend_lasttweet[follower_id_str] = map_friend_lasttweet
 
+        print "Exiting initialize_maps() at ", datetime.datetime.now()
         return map_follower_lasttweet, map_follower_map_friend_lasttweet, map_follower_list_friends
 
 
