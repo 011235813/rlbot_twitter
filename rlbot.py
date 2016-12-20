@@ -930,6 +930,12 @@ class rlbot:
                     if err[0][0]['code'] == 108:
                         # could not find specified user, ignore and proceed
                         return 0
+                    elif err[0][0]['code'] == 160:
+                        # already requested to follow user, ignore and continue
+                        return 0
+                    elif err[0][0]['code'] == 162:
+                        # user blocked bot accounts from following
+                        return 0
                     elif err[0][0]['code'] == 326:
                         # account temporarily locked
                         return 1
