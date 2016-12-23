@@ -19,7 +19,7 @@ import os
 
 class main:
 
-    def __init__(self, init_bots=1, init_observer=1, sourcefile='source.txt', 
+    def __init__(self, init_bots=1, init_observer=1, extra_observers=0, sourcefile='source.txt', 
                  logfile='log.txt'):
         
 #        self.path = '/home/t3500/devdata/rlbot_data'
@@ -37,8 +37,16 @@ class main:
         if init_observer:
             self.observer = rlbot.rlbot('matt_learner', 'key_ml.txt')
 
+        if extra_observers:
+            self.obsever2 = rlbot.rlbot('username124816', 'keys.txt')
+            self.observer3 = rlbot.rlbot('username124816', 'keys2.txt')
+            
         if init_bots and init_observer:
             self.bots.append( self.observer )
+
+        if init_bots and init_observer and extra_observers:
+            self.bots.append( self.observer2 )
+            self.bots.append( self.observer3 )
 
         # List of times to observe activity of followers
         # This is independent of the observations made by each bot
@@ -736,7 +744,7 @@ class main:
 
             # Ignore potential bots and spammers that post with high frequency
             if len(tweets) > 3:
-                tweets = self.reservoir_sample(tweets, 20)
+                tweets = self.reservoir_sample(tweets, 3)
 
             # Write to records_*.csv
             path_to_file = "%s/records_%s.csv" % (self.path, follower_id)
@@ -770,12 +778,15 @@ class main:
             # Write to retweeters_*.csv
             f = open("%s/retweeters_%s.csv" % (self.path, follower_id), "a")
             for tweet_id_str in list_tweet_id:
+                # Bottleneck: with 1950 followers, assuming each makes 3 tweets per day
+                # and each of the 8 bots can observe 75 retweets per 15 min, this takes
+                # 1950 * 3 / (75*8) / 4 = 2.4 hours
                 list_tuples = self.bots[bot_id_retweets].get_retweets_single(tweet_id_str, verbose=0)
 
                 # Check whether need to switch to another bot for get_retweets_single()
                 counter_retweets += 1
                 if counter_retweets == 75:
-                    bot_id_retweets = (bot_id_retweets + 1) % 6 # go to next bot
+                    bot_id_retweets = (bot_id_retweets + 1) % len(self.bots) # go to next bot
                     counter_retweets = 0 # reset counter
 
                 s = "%s," % tweet_id_str
@@ -796,7 +807,7 @@ class main:
         """
         This function is called only at the end of a day, after event_queue has been emptied
         For each follower, append to file:
-        records_*.csv - friend_id, tweet_id, time created, num likes, num retweets, num followers
+        friends_of_*.csv - friend_id, tweet_id, time created, num likes, num retweets, num followers
 
         Argument
         1. list_to_track - the list of followers (refreshed at start of every day)
@@ -835,7 +846,7 @@ class main:
                 # Check whether need to switch to another bot for get_timeline
                 counter_timeline += 1
                 if counter_timeline == 800:
-                    bot_id_timeline = (bot_id_timeline + 1) % 6 # go to next bot
+                    bot_id_timeline = (bot_id_timeline + 1) % len(self.bots) # go to next bot
                     counter_timeline = 0 # reset counter
 
                 num_posts = len(tweets)
@@ -907,10 +918,13 @@ class main:
             # Check whether need to switch to another bot for get_timeline
             counter_timeline += 1
             if counter_timeline == 180:
-                bot_id_timeline = (bot_id_timeline + 1) % 6 # go to next bot
+                bot_id_timeline = (bot_id_timeline + 1) % len(self.bots) # go to next bot
                 counter_timeline = 0 # reset counter
 
             # Get list of all friends of follower_id_str
+            # Bottleneck: With 1950 followers, cycling through 8 bots
+            # with each bot allowed 15 calls of get_friends() per 15min, this takes
+            # 1950 / (8*15) / 4 = 4 hours
             list_friends = self.bots[bot_id_friends].get_friends(follower_id_str)
             map_follower_list_friends[follower_id_str] = list_friends
             if len(list_friends) > 10:
@@ -919,7 +933,7 @@ class main:
             # Check whether need to switch to another bot
             counter_friends += 1
             if counter_friends == 15:
-                bot_id_friends = (bot_id_friends + 1) % 6 # go to next bot
+                bot_id_friends = (bot_id_friends + 1) % len(self.bots) # go to next bot
                 counter_friends = 0 # reset counter
 
             # Map from friend_id_str --> id_str of last post
@@ -933,7 +947,7 @@ class main:
                 # Check whether need to switch to another bot
                 counter_timeline += 1
                 if counter_timeline == 180:
-                    bot_id_timeline = (bot_id_timeline + 1) % 6 # go to next bot
+                    bot_id_timeline = (bot_id_timeline + 1) % len(self.bots) # go to next bot
                     counter_timeline = 0 # reset counter
 
             map_follower_map_friend_lasttweet[follower_id_str] = map_friend_lasttweet
@@ -1045,7 +1059,7 @@ class main:
             self.observe_follower_detail(list_to_track, map_follower_lasttweet)
 
             # Record follower's friends details
-            self.observe_follower_friend_detail(list_to_track, map_follower_map_friend_lasttweet)
+            # self.observe_follower_friend_detail(list_to_track, map_follower_map_friend_lasttweet)
 
             # Clear the list of tweets made by each bot during previous day
             self.map_bot_already_tweeted = { bot_id:[] for bot_id in range(0,4+1) }           
