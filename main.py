@@ -38,7 +38,7 @@ class main:
             self.observer = rlbot.rlbot('matt_learner', 'key_ml.txt')
 
         if extra_observers:
-            self.obsever2 = rlbot.rlbot('username124816', 'keys.txt')
+            self.observer2 = rlbot.rlbot('username124816', 'keys.txt')
             self.observer3 = rlbot.rlbot('username124816', 'keys2.txt')
             
         if init_bots and init_observer:
