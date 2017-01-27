@@ -529,6 +529,25 @@ class main:
             self.map_bot_action_time[bot_id] = list_time
 
         f.close()
+
+
+    def generate_post_time(self):
+        """
+        Prompts for file name to indicate readiness
+        Assumes that file is located in same folder as this program
+        Reads file and populates self.map_bot_action_time
+        """
+        file_name = raw_input("Enter name of time file: ")
+        f = open(file_name, 'r')
+        lines = f.readlines()
+        f.close()
+        
+        f = open(self.logfilename, "a")
+        for bot_id in range(5):
+            f.write("Bot %d tweet times\n" % bot_id)
+            list_times = lines[bot_id].strip().split(' ')
+            # NOT COMPLETE
+            
         
 
     def generate_observation_time(self, t_start, t_end, N):
