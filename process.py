@@ -4,6 +4,7 @@ import fnmatch
 import subprocess
 import random
 import datetime
+import rlbot
 
 class process:
 
@@ -13,19 +14,18 @@ class process:
             self.dir_name = "/home/t3500/devdata/rlbot_data_highfrequency"
         elif choice == 1:
             self.dir_name = "/home/t3500/devdata/rlbot_data_secondorder"        
-
+        self.bot = rlbot.rlbot('username124816','keys.txt')
+        # Map from twitter id (string) to anonymized number (int)
         self.map_userid_number = {}
 
-    def create_id(self, matrix_file, f_write):
+    def create_id(self, matrix_file='matrix_day72_backup.csv', f_write='map_userid_id.csv'):
         """
         Input:
         matrix_file - adjacency matrix representation of the graph
 
-        Extracts list of followers, randomize the list, number them from 1 to N
-        Creates writes mapping file that maps each user_id to its number
-        Also writes network.txt of format
-        u_i v_i
-        where u_i follows v_i
+        Extracts list of followers, randomize the list, number them from 6 to N+5
+        Appends to mapping file that maps each user_id to its number
+        Assumes that mapping file already contains mapping from bots to 1...5
         """
         path_to_file = self.dir_name + "/" + matrix_file
         f = open(path_to_file, 'r')
@@ -47,9 +47,9 @@ class process:
             list_userids[idx_rand] = temp
         
         # Create mapping and store to file
-        f = open(f_write, 'w')
-        for idx in range(1, N+1):
-            f.write("%s,%d\n" % (list_userids[idx-1], idx))
+        f = open(f_write, 'a')
+        for idx in range(N):
+            f.write("%s,%d\n" % (list_userids[idx], idx+6))
         f.close()
 
     def create_network(self, f_map='map_userid_id.csv', f_matrix='matrix_day72_backup.csv', f_output='network.txt'):
@@ -86,6 +86,27 @@ class process:
                     friend_number = self.map_userid_number[friend_userid]
                     f_write.write("%d %d\n" % (follower_number, friend_number))
         f_write.close()
+        f.close()
+
+    
+    def append_network_bots(self, f_output='network.txt'):
+        """
+        For each bot, for all followers of the bot that exists in matrix_day72.csv,
+        append the relationship "follower_id_anonymized unique_bot_id" to f_output
+
+        This is only to add the bots into network.txt
+        Relationships among the followers were already added by create_network()
+        
+        Requires read_map_file() to be run before running this function
+        """
+        # Open file for appending
+        f = open(f_output,'a')
+        for bot_id in range(1, 5+1):
+            list_followers = self.bot.get_followers('ml%d_gt' % bot_id)
+            for follower_id in list_followers:
+                if follower_id in self.map_userid_number:
+                    f.write("%d %d\n" % (self.map_userid_number[follower_id],
+                                         bot_id))
         f.close()
 
 
@@ -146,3 +167,65 @@ class process:
         f_write.close()
         print "Total number of retweets from outside network = %d" % count_outside
 
+
+    def create_activity_all(self, f_output='activity_all.txt'):
+        """
+        f_output - file with rows "t_i u_i" for retweet at time t_i by 
+        user u_i
+
+        Need to call read_map_file() prior to calling this function
+        """
+        list_tuple = []
+        epoch = datetime.datetime.utcfromtimestamp(0)        
+
+        # For each records_*.csv, excluding records_{0,1,2,3,4}.csv
+        regex = re.compile('records_.\.csv')
+        for filename in os.listdir(self.dir_name):
+            if not re.match(regex, filename):
+                if fnmatch.fnmatch(filename, 'records_*.csv'):
+                    path_to_file = self.dir_name + "/" + filename
+                    ret = subprocess.check_output(['wc', '-l', path_to_file])
+                    num = int(ret.split(' ')[0])
+                    # If follower has activity
+                    if num > 1:
+                        follower_id = filename.split('_')[1].split('.')[0]
+                        # Extract id of follower, get the anonymous number
+                        if follower_id in self.map_userid_number:
+                            follower_num = self.map_userid_number[follower_id]
+                            # Parse through file
+                            f = open(path_to_file,'r')
+                            # Skip first line
+                            f.readline()
+                            for line in f:
+                                line_split = line.split(',')
+                                # Extract the time of post, create the pair
+                                # year-month-day-hour-min-second (UTC - 4)
+                                date_and_time = line_split[1]
+                                dt_local = datetime.datetime.strptime(date_and_time, '%Y-%m-%d-%H:%M:%S')
+                                dt_utc = dt_local + datetime.timedelta(hours=4)
+                                seconds = (dt_utc - epoch).total_seconds()
+                                list_tuple.append((seconds,follower_num))           
+        # Now append the bot activity
+        for bot_id in range(0,5):
+            print bot_id
+            filename = "records_%d.csv" % bot_id
+            path_to_file = self.dir_name + "/" + filename
+            f = open(path_to_file, 'r')
+            # Skip first line
+            f.readline()
+            for line in f:
+                line_split = line.split(',')
+                # Extract time of post, create the pair
+                date_and_time = line_split[1]
+                dt_local = datetime.datetime.strptime(date_and_time, '%Y-%m-%d-%H-%M-%S')
+                dt_utc = dt_local + datetime.timedelta(hours=4)
+                seconds = (dt_utc - epoch).total_seconds()
+                list_tuple.append((seconds, bot_id+1))
+
+        # Sort all pairs based on time of post
+        list_tuple.sort()
+        # Write f_output
+        f_write = open(f_output, 'w')
+        for t in list_tuple:
+            f_write.write("%d %d\n" % (t[0], t[1]))
+        f_write.close()
