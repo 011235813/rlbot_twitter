@@ -6,6 +6,7 @@ Created on Thu Sep 15 12:32:08 2016
 """
 
 import rlbot
+import process
 
 import time
 import random
@@ -25,7 +26,8 @@ class main:
 #        self.path = '/home/t3500/devdata/rlbot_data'
 #        self.path = '/home/t3500/devdata/rlbot_data_course'
 #        self.path = '/home/t3500/devdata/rlbot_data_highfrequency'
-        self.path = '/home/t3500/devdata/rlbot_data_secondorder'
+        self.path = '/home/t3500/devdata/rlbot_data_secondorder' # here
+        # self.path = r'C:\Users\Jiachen\Documents\Projects\CS8903\rlbot_twitter' # here
         self.logfilename = self.path + '/' + logfile
 
         # List of bots
@@ -82,6 +84,15 @@ class main:
         # post times are random, rather than queried from the algorithm 
         # in stages. 
         self.map_bot_action_time = { idx:[] for idx in range(0,4+1)}
+
+        # List of recorded tuples, to be sorted chronologically after recording
+        # of response to bots has finished
+        self.list_response_tuples = []
+        self.num_response_outsiders = 0 # number of retweets by people not inside network
+        # For checking whether a retweeter is inside the network
+        self.p = process.process(1)
+        # Populate mapping from userid of follower to anonymized unique label
+        self.p.read_map_file() 
 
     def write_headers(self):
         """
@@ -441,6 +452,7 @@ class main:
        
     # Record the response to a previous action   
     def record(self, bot_id):
+        epoch = datetime.datetime.utcfromtimestamp(0)
         
         # Extract the id_str of the last tweet of this bot from the queue
         pair = self.map_bot_tweet_prev[bot_id].get()
@@ -467,6 +479,15 @@ class main:
             retweeter_id_str = retweeter[0]
             retweeter_datetime = retweeter[1].strftime('%Y-%m-%d-%H-%M-%S')
             s += "%s,%s," % (retweeter_id_str, retweeter_datetime)
+            # new
+            # If retweeter is inside the network of followers
+            if retweeter_id_str in self.p.map_userid_number:
+                retweeter_num = self.p.map_userid_number[retweeter_id_str]
+                dt_utc = retweeter[1] + datetime.timedelta(hours=4)
+                seconds = (dt_utc - epoch).total_seconds()
+                self.list_response_tuples.append( (seconds, retweeter_num, bot_id+1) )
+            else:
+                self.num_response_outsiders += 1
         s += "\n"
         f = open("%s/retweeters_%d.csv" % (self.path, bot_id), "a")
         f.write(s)
@@ -533,9 +554,15 @@ class main:
 
     def generate_post_time(self):
         """
-        Prompts for file name to indicate readiness
+        Prompts for file name to proceed
         Assumes that file is located in same folder as this program
-        Reads file and populates self.map_bot_action_time
+        Assumes that file has format
+        t_11 t_12 ...
+        t_21 t_22 t_23 ...
+        ...
+        t_51 t_52 ...
+        where t_{ij} is the j-th time in seconds since midnight when bot i should post
+        Populates self.map_bot_action_time
         """
         file_name = raw_input("Enter name of time file: ")
         f = open(file_name, 'r')
@@ -544,11 +571,26 @@ class main:
         
         f = open(self.logfilename, "a")
         for bot_id in range(5):
-            f.write("Bot %d tweet times\n" % bot_id)
+            f.write("Bot %d tweet times\n" % bot_id) # write to log file
+            # List of integers, each integer is the number of seconds since 00:00:00
             list_times = lines[bot_id].strip().split(' ')
-            # NOT COMPLETE
-            
-        
+
+            for idx in range(len(list_times)):
+                t_sec = int(list_times[idx])
+                minute, second = divmod(t_sec, 60)
+                hour, minute = divmod(minute, 60)
+                # Replace time in seconds with tuple
+                list_times[idx] = (hour, minute, second)
+                f.write("%d,%d,%d\n" % (hour, minute, second))
+
+            # Sort into chronological order and store into map   
+            list_times.sort()
+            print "Bot %d" % bot_id
+            print list_times
+            self.map_bot_action_time[bot_id] = list_times
+
+        f.close()
+
 
     def generate_observation_time(self, t_start, t_end, N):
         """
@@ -901,7 +943,7 @@ class main:
         """
         This function is called at the start of every day
         Takes in list_to_track, which is the list of all followers of the bots
-        Returns two maps:
+        Returns three maps:
         1. map_follower_lasttweet - map from follower_id to tweet_id of most recent tweet
         2. map_follower_map_friend_lasttweet - map from follower_id to map from friend_id
         to tweet_id of most recent tweet by that friend of that follower
@@ -1018,11 +1060,9 @@ class main:
         
             # At the start of each day, generate the entire set of action times
             # for all bots
-            self.generate_post_time_random( (8,0,0), (23,0,0), 5 )
+            # self.generate_post_time_random( (8,0,0), (23,0,0), 5 ) # old
+            self.generate_post_time() # new
 
-            # NOTE: this method of putting action events into the queue all at once is only
-            # correct for the version of the system that does not use the algorithm
-            # to generate action times. 
             # Store all action times into priority queue
             # For each action time, include information on which bot is associated
             # with the time, and indicate that the event type is action 'a'
@@ -1057,11 +1097,27 @@ class main:
                     id_str_mine = self.act(event_bot, attribute=0, verbose=1)
                     if id_str_mine != "":
                         num_post += 1
-                        t_observe = (23,30,num_post)
+                        t_observe = (23,55,num_post) # new
                         # Insert the observation event into the queue
                         self.event_queue.put( (t_observe, event_bot, 'o') )
                 elif event_type == 'o': # If event is an observation of response
                     self.record(event_bot)
+
+            # new
+            print "Finished acting and recording response at", datetime.datetime.now()
+            # Sort response and write to file
+            self.list_response_tuples.sort()
+            f = open("activity_day%d.txt" % num_day, "w")
+            for t in self.list_response_tuples:
+                f.write("%d %d %d\n" % (t[0], t[1], t[2])) # time follower_num bot_num
+            f.close()
+            f = open(self.logfilename, "a")
+            f.write("Number of retweets by outsiders: %d\n" % self.num_response_outsiders)
+            f.close()
+            # Clear the list for the next day
+            self.list_response_tuples = []
+            self.num_response_outsiders = 0
+            print "Finished writing activity file at", datetime.datetime.now()
                     
             # Sleep until 00:00:10 of next day
             current_time = datetime.datetime.now()
