@@ -18,13 +18,14 @@ import os
 
 class main:
 
-    def __init__(self, init_bots=1, init_observer=1, extra_observers=0, sourcefile='source.txt', 
-                 logfile='log.txt'):
+    def __init__(self, init_bots=1, init_observer=1, extra_observers=0, 
+                 sourcefile='source.txt', logfile='log.txt'):
         
-#        self.path = '/home/t3500/devdata/rlbot_data'
-#        self.path = '/home/t3500/devdata/rlbot_data_course'
-#        self.path = '/home/t3500/devdata/rlbot_data_highfrequency'
-        self.path = '/home/t3500/devdata/rlbot_data_secondorder' # here
+        # self.path = '/home/t3500/devdata/rlbot_data'
+        # self.path = '/home/t3500/devdata/rlbot_data_course'
+        # self.path = '/home/t3500/devdata/rlbot_data_highfrequency'
+        # self.path = '/home/t3500/devdata/rlbot_data_secondorder' # here
+        self.path = '/home/t3500/devdata/rlbot_data_experiment'
         # self.path = r'C:\Users\Jiachen\Documents\Projects\CS8903\rlbot_twitter' # here
         self.logfilename = self.path + '/' + logfile
 
@@ -32,7 +33,8 @@ class main:
         self.bots = []
         if init_bots:
             for idx in range(1, 5+1):
-                self.bots.append( rlbot.rlbot(name="ml%d_gt"%idx, keyfile="key_bot%d.txt"%idx) )
+                self.bots.append( rlbot.rlbot(name="ml%d_gt"%idx, 
+                                              keyfile="key_bot%d.txt"%idx) )
         
         if init_observer:
             self.observer = rlbot.rlbot('matt_learner', 'key_ml.txt')
@@ -59,9 +61,6 @@ class main:
         # still requires a measurement of the response
         self.map_bot_tweet_prev = { idx:Queue.Queue() for idx in range(0,4+1) }
         
-        # Map bot_id --> list of id_str of all tweets that the bot has posted during lifetime
-        # self.all_tweet = { idx:[] for idx in range(0,4+1) }
-
         # List of screen_name of accounts whose tweets will be copied 
         # and tweeted by the bot
         self.list_source = []
@@ -464,13 +463,13 @@ class main:
         self.bots[bot_id].update_followers()
         f = open("%s/records_%d.csv" % (self.path, bot_id), "a")
         f.write("%s,%s,%d,%d,%d\n" % (tweet_id_str, tweet_time, num_like_prev, 
-                                 num_retweet_prev, 
-                                 self.bots[bot_id].num_followers))
+                                      num_retweet_prev, 
+                                      self.bots[bot_id].num_followers))
         f.close()
         
         # Retweeter info
         # Format of retweeters_*.csv is
-        # tweet id_str, retweeter1 id_str, datetime1, retweeter2 id_str, datetime2, and so on
+        # tweet id_str, retweeter1 id_str, datetime1, retweeter2 id_str, datetime2,...
         list_retweeter_info = self.observe_retweeter(bot_id, tweet_id_str)
         s = "%s," % tweet_id_str
         for retweeter in list_retweeter_info:
@@ -977,7 +976,8 @@ class main:
             # Check whether need to switch to another bot for get_timeline
             counter_timeline += 1
             if counter_timeline == 180:
-                bot_id_timeline = (bot_id_timeline + 1) % len(self.bots) # go to next bot
+                # go to next bot
+                bot_id_timeline = (bot_id_timeline + 1) % len(self.bots) 
                 counter_timeline = 0 # reset counter
 
             # Get list of all friends of follower_id_str
@@ -992,7 +992,8 @@ class main:
             # Check whether need to switch to another bot
             counter_friends += 1
             if counter_friends == 15:
-                bot_id_friends = (bot_id_friends + 1) % len(self.bots) # go to next bot
+                # go to next bot
+                bot_id_friends = (bot_id_friends + 1) % len(self.bots) 
                 counter_friends = 0 # reset counter
 
             # Map from friend_id_str --> id_str of last post
@@ -1006,7 +1007,8 @@ class main:
                 # Check whether need to switch to another bot
                 counter_timeline += 1
                 if counter_timeline == 180:
-                    bot_id_timeline = (bot_id_timeline + 1) % len(self.bots) # go to next bot
+                    # go to next bot
+                    bot_id_timeline = (bot_id_timeline + 1) % len(self.bots) 
                     counter_timeline = 0 # reset counter
 
             map_follower_map_friend_lasttweet[follower_id_str] = map_friend_lasttweet
