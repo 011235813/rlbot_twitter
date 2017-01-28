@@ -15,8 +15,6 @@ from operator import itemgetter
 import Queue
 import os
 
-# Import reinforcement learning algorithm
-# import algorithm
 
 class main:
 
@@ -803,10 +801,6 @@ class main:
                 print "observe_follower_detail() counter %d, num_posts %d" % (counter, num_posts)
                 print "Max: follower %s has %d tweets" % (culprit, count_max)
 
-            # Ignore potential bots and spammers that post with high frequency
-            if len(tweets) > 3:
-                tweets = self.reservoir_sample(tweets, 3)
-
             # Write to records_*.csv
             path_to_file = "%s/records_%s.csv" % (self.path, follower_id)
             if os.path.isfile(path_to_file):
@@ -822,6 +816,10 @@ class main:
                 s = "%s,%s,%s,%d,%d\n" % (tweet.id_str, creation_time, text_mod, tweet.favorite_count, tweet.retweet_count)
                 f.write(s.encode('utf8'))
             f.close()
+
+            # Ignore potential bots and spammers that post with high frequency
+            if len(tweets) > 3:
+                tweets = self.reservoir_sample(tweets, 3)
 
             list_tweet_id = [tweet.id_str for tweet in tweets]
             
