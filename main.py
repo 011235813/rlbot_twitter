@@ -354,7 +354,10 @@ class main:
         # will have format "RT @someone: <The actual text>"
         # Therefore, remove everything before the actual text
         if ("RT " in input_text):
-            idx = input_text.index(":")
+            idx = input_text.find(":")
+            if idx == -1:
+                # Doesn't match format of retweet, so just return original
+                return input_text
             return input_text[idx+2:]
         else:
             return input_text
@@ -1060,8 +1063,8 @@ class main:
         
             # At the start of each day, generate the entire set of action times
             # for all bots
-            # self.generate_post_time_random( (8,0,0), (23,0,0), 5 ) # old
-            self.generate_post_time() # new
+            self.generate_post_time_random( (8,0,0), (23,0,0), 5 ) # old # here
+            # self.generate_post_time() # new # here
 
             # Store all action times into priority queue
             # For each action time, include information on which bot is associated
