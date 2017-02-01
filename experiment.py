@@ -1102,6 +1102,10 @@ class experiment:
                 # Get current time
                 now = datetime.datetime.now()
                 if phase == 'day' or (phase == 'night' and event_time[0] < 24):
+                    # For the case phase == 'night', event_time[0] may be greater than 24
+                    # to represent event occurring between 12midnight and 7:30am
+                    # Since event_time[0] is less than 24, that means event occurs
+                    # between 8pm and 12midnight. Treat it like the 'day' case.
                     # Seconds elapsed since the start of the day at midnight
                     now_seconds = 3600*now.hour + 60*now.minute + now.second
                     event_time_seconds = 3600*event_time[0] + 60*event_time[1] + event_time[2]
