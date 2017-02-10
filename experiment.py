@@ -25,7 +25,7 @@ class experiment:
         # self.path = '/home/t3500/devdata/rlbot_data_course'
         # self.path = '/home/t3500/devdata/rlbot_data_highfrequency'
         # self.path = '/home/t3500/devdata/rlbot_data_secondorder' # here
-        self.path = '/home/t3500/devdata/rlbot_data_experiment'
+        self.path = '/home/t3500/devdata/rlbot_data_experiment2'
         # self.path = r'C:\Users\Jiachen\Documents\Projects\CS8903\rlbot_twitter' # here
         self.logfilename = self.path + '/' + logfile
 
@@ -1029,7 +1029,7 @@ class experiment:
         return map_follower_lasttweet, map_follower_map_friend_lasttweet, map_follower_list_friends
 
 
-    def run(self, total_stage, start_stage_num=0, initial_phase='night', header=0):
+    def run(self, total_stage, start_stage_num=0, initial_phase='night', comp=2, header=0):
         """
         Main program that schedules and executes all events for the entire
         duration of the experiment
@@ -1051,7 +1051,7 @@ class experiment:
         
             num_stage += 1
             f = open(self.logfilename, "a")
-            f.write("\nStage %d, %s\n" % (num_stage, phase))
+            f.write("\nStage %d comp %d, %s\n" % (num_stage, comp, phase))
             f.close()
             print "Stage %d, phase %s at" % (num_stage, phase), datetime.datetime.now()
         
@@ -1203,7 +1203,7 @@ class experiment:
             print "Finished acting and recording response at", datetime.datetime.now()
             # Sort response and write to file
             self.list_response_tuples.sort()
-            f = open("activities/activity_stage%d.txt" % num_stage, "w")
+            f = open("activities/activity_stage%d_comp%d.txt" % (num_stage,comp), "w")
             for t in self.list_response_tuples:
                 f.write("%d %d %d\n" % (t[0], t[1], t[2])) # time follower_num bot_num
             f.close()
