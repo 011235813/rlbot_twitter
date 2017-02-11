@@ -229,3 +229,128 @@ class process:
         for t in list_tuple:
             f_write.write("%d %d\n" % (t[0], t[1]))
         f_write.close()
+
+
+    def create_activity_history(self, f_output='activity_history.txt'):
+        """
+        Creates file with following format:
+        n
+        <UTC time since epoch in seconds> <retweeter_num> <bot_num>
+        <UTC time since epoch in seconds> <retweeter_num> <bot_num>
+        ...
+        <UTC time since epoch in seconds> <retweeter_num> <bot_num>
+        n
+        <UTC time since epoch in seconds> <retweeter_num> <bot_num>
+        ...
+        where n indicates number of subsequent lines defining a stage
+        of 12 hours from 8am to 8pm and 8pm to 8am,
+        time is time of post, 
+        retweeter_num is label of the retweeter according to map_userid_id.csv,
+        (which could be the bot as well)
+        and bot_num is the (bot_id + 1) of the bot who made the original post 
+        """
+
+        epoch = datetime.datetime.utcfromtimestamp(0)
+        list_tuples = []
+
+        # Gather all the posts made by bots in records_*.csv
+        print "Gathering bot posts"
+        for bot_id in range(0,5):
+            print bot_id
+            filename = "records_%d.csv" % bot_id
+            path_to_file = self.dir_name + "/" + filename
+            f = open(path_to_file, 'r')
+            # Skip first line
+            f.readline()
+            for line in f:
+                line_split = line.split(',')
+                # Extract time of post, create the pair
+                date_and_time = line_split[1]
+                dt_local = datetime.datetime.strptime(date_and_time, '%Y-%m-%d-%H-%M-%S')
+                if (dt_local.year == 2016 and 
+                    (dt_local.month < 11 or (dt_local.month == 11 and dt_local.day < 7))):
+                    dt_utc = dt_local + datetime.timedelta(hours=4)
+                else:
+                    dt_utc = dt_local + datetime.timedelta(hours=5)
+                seconds = (dt_utc - epoch).total_seconds()
+                list_tuples.append((seconds, bot_id+1, bot_id+1))
+        
+        # Gather all the retweets by followers
+        count_outside = 0
+        count_inside = 0
+        print "Gathering retweets"
+        for bot_id in range(0,5):
+            print bot_id
+            filename = "retweeters_%d.csv" % bot_id
+            path_to_file = self.dir_name + "/" + filename
+            f = open(path_to_file, 'r')
+            for line in f:
+                # Discard tweet_id (first element) and newline (last element)
+                list_retweeter_time = line.split(',')[1:-1]
+                if len(list_retweeter_time) != 0:
+                    idx = 0
+                    while idx < len(list_retweeter_time):
+                        retweeter_id = list_retweeter_time[idx]
+                        if retweeter_id in self.map_userid_number:
+                            retweeter_num = self.map_userid_number[retweeter_id]
+                            count_inside += 1
+                        else:
+                            retweeter_num = -1
+                            count_outside += 1
+                        idx += 1
+                        if retweeter_num != -1:
+                            # year-month-day-hour-min-second (UTC - 4)
+                            tweet_time = list_retweeter_time[idx]
+                            dt_local = datetime.datetime.strptime(tweet_time, '%Y-%m-%d-%H-%M-%S')
+                            dt_utc = dt_local + datetime.timedelta(hours=4)
+                            seconds = (dt_utc - epoch).total_seconds()
+                            list_tuples.append( (seconds, retweeter_num, bot_id+1) )
+                        idx += 1
+        print "Retweets from inside = %d" % count_inside
+        print "Retweets from outside = %d" % count_outside
+        
+        # Sort the entire list by time
+        list_tuples.sort()
+
+        # Get the time of first event
+        first_event_time = list_tuples[0][0] # seconds since epoch of utc time
+        # Convert to EST (daylight savings)
+        first_event_time = datetime.datetime.utcfromtimestamp(first_event_time) + datetime.timedelta(hours=-4)
+        # Get start time of stage
+        if first_event_time.hour < 20 and first_event_time.hour >= 8:
+            # Day stage
+            start = datetime.datetime(first_event_time.year, first_event_time.month,
+                                      first_event_time.day, 8, 0, 0)
+        elif first_event_time.hour >= 20 or first_event_time.hour < 8:
+            # Night stage
+            start = datetime.datetime(first_event_time.year, first_event_time.month,
+                                      first_event_time.day-1, 20, 0, 0)
+        print start
+        # Convert back into seconds since epoch in utc time
+        start_utc_seconds = (start + datetime.timedelta(hours=4) - epoch).total_seconds()
+        
+        # Partition into 12 hour sections
+        print "Writing file"
+        stage_end = start_utc_seconds + 12*60*60
+        idx_prev = 0
+        f = open(f_output, 'w')
+        for idx in range(len(list_tuples)):
+            if list_tuples[idx][0] < stage_end:
+                if idx == len(list_tuples)-1:
+                    # at last item
+                    count = idx - idx_prev + 1
+                    f.write('%d\n' % count)
+                    for idx2 in range(idx_prev, idx+1):
+                        triple = list_tuples[idx2]
+                        f.write('%d %d %d\n' % (triple[0], triple[1], triple[2]))
+                idx += 1
+            else:
+                count = idx - idx_prev
+                f.write('%d\n' % count)
+                for idx2 in range(idx_prev, idx):
+                    triple = list_tuples[idx2]
+                    f.write('%d %d %d\n' % (triple[0], triple[1], triple[2]))
+                idx_prev = idx
+                stage_end += 12*60*60
+                idx += 1
+        f.close()
