@@ -256,6 +256,31 @@ class rlbot:
         return followers
             
 
+    def get_followers_cursored(self, user=None, cursor=-1, stringify=False):
+        """
+        returns list_of_follower_IDs, next_cursor
+        """
+        followers = []
+        done = 0
+        while done == 0:
+            if ( self.remaining['followers'] != 0 ):
+                try:
+                    returned = self.api.followers_ids(user, cursor=cursor, stringify_ids=stringify)
+                    followers = returned[0]
+                    next_cursor = returned[1][1]
+                    self.remaining['followers'] -= 1
+                    done = 1
+                except tweepy.RateLimitError:
+                    print "%s get_followers_cursored() rate limite error" % self.name
+                    self.wait_limit_reset('followers')
+                except tweepy.TweepError:
+                    return followers
+            else:
+                self.wait_limit_reset('followers')
+
+        return followers, next_cursor
+
+
     def update_followers(self):
         # self.followers = self.get_followers()
         done = 0
