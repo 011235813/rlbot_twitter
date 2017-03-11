@@ -36,10 +36,10 @@ class rlbot:
         # is limited to 180calls/15min
         # The main bot program will sync this up with Twitter's record
         # every 15 minutes
-        self.remaining = {'followers':15, 'timeline':180, 'status_lookup':180,
+        self.remaining = {'followers':15, 'timeline':900, 'status_lookup':900,
                           'search':180,
-                          'retweets':60, 'retweets_of_me':15, 'friends':15,
-                          'user':180, 'update':25}        
+                          'retweets':75, 'retweets_of_me':75, 'friends':15,
+                          'user':900, 'user_lookup':900, 'update':25}
         
         # Initialize connection to API
         self.api = self.activate()
@@ -111,13 +111,15 @@ class rlbot:
         users = limits['resources']['users']
         statuses = limits['resources']['statuses']
         search = limits['resources']['search']    
-        
+
         if choice == "followers":
             return followers['/followers/ids']['remaining'] # lim 15/15min
         elif choice == "friends":
             return friends['/friends/ids']['remaining'] # lim 15/15min
         elif choice == "user":
             return users['/users/show/:id']['remaining'] # lim 900/15min
+        elif choice == "user_lookup":
+            return users['/users/lookup']['remaining'] # lim 900/15min
         elif choice == "timeline":
             return statuses['/statuses/user_timeline']['remaining'] # lim 900/15min
         elif choice == "status_lookup":
@@ -163,6 +165,8 @@ class rlbot:
             return friends['/friends/ids']['reset'] # lim 15/15min
         elif choice == "user":
             return users['/users/show/:id']['reset'] # lim 900/15min
+        elif choice == "user_lookup":
+            return users['/users/lookup']['reset'] # lim 900/15min
         elif choice == "timeline":
             return statuses['/statuses/user_timeline']['reset'] # lim 900/15min
         elif choice == "status_lookup":
@@ -192,6 +196,7 @@ class rlbot:
         self.remaining['retweets'] = self.get_limits(limits, 'retweets')
         self.remaining['retweets_of_me'] = self.get_limits(limits, 'retweets_of_me')
         self.remaining['user'] = self.get_limits(limits, 'user')
+        self.remaining['user_lookup'] = self.get_limits(limits, 'user_lookup')
         self.remaining['update'] = 25
 
 
@@ -223,6 +228,33 @@ class rlbot:
                 # Somehow api.rate_limit_status() itself reached the rate limit, so wait
                 # and try again
                 time.sleep(60)
+
+
+    def get_users(self, list_uid=[]):
+        """
+        Argument:
+        1. list_uid - list of userids
+        
+        Returns:
+        1. list of user objects
+        """
+        list_users = []
+        done = 0
+        while done == 0:
+            if (self.remaining['user_lookup'] != 0):
+                try:
+                    list_users = self.api.lookup_users(user_ids=list_uid)
+                    self.remaining['user_lookup'] -= 1
+                    done = 1
+                except tweepy.RateLimitError:
+                    print "%s get_users() rate limit error" % self.name
+                    self.wait_limit_reset('user_lookup')
+                except tweepy.TweepError:
+                    return list_users
+            else:
+                self.wait_limit_reset('user_lookup')
+
+        return list_users
 
 
     def get_followers(self, userid=None, verbose=0):
