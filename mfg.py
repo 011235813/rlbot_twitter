@@ -68,5 +68,74 @@ class mfg:
             f.write('%d\n' % follower_id)
         f.close()
 
+    
+    def filter_both(self, pred, iterable):
+        list_pass = []
+        list_fail = []
+        for thing in iterable:
+            if pred(thing):
+                list_pass.append(thing)
+            else:
+                list_fail.append(thing)
+        return list_pass, list_fail
 
-                
+
+    def filter_location(self, sourcefile='followers_all.txt', locations=['Atlanta, GA', 'Atlanta'], outfile1='population_location_in.txt', outfile2='population_location_out.txt'):
+        """
+        Arguments:
+        1. sourcefile - each line is a user ID
+        2. location - list of filter criteria
+        3. outfile1 - output file of user ID that satisfy location criteria
+        4. outfile2 - output file of user ID that fail location criteria
+
+        Creates outfile1 and outfile2
+        Expected to take 5.4e6 / (3 * 900 * 100) / 4 = 5 hours
+        using 3 bots that each makes 900 requests per 15min,
+        with each request handling 100 user IDs
+        """
+
+        # Read sourcefile
+        f = open(self.path + '/' + sourcefile, 'r')
+        list_ids = f.readlines()
+        f.close()
+        list_ids = map( (lambda x: x.strip()), list_ids )
+
+        # Counter for get_followers_cursored() rate limit
+        counter_bot = 0
+        # Bot to use for get_followers_cursored(). Cyclic
+        choice_bot = 0        
+
+        num_total = len(list_ids)
+        idx = 0
+        while idx < num_total:
+            
+            print "idx = %d" % idx
+            # Process 100 user IDs with each request
+            list_users = self.bots[choice_bot].get_users(list_ids[idx:min(idx+100,num_total)])
+            # print len(list_users)
+            counter_bot += 1
+            if counter_bot == 900:
+                # go to next bot and reset counter
+                choice_bot = (choice_bot + 1) % len(self.bots)
+                print "Switch to %d" % choice_bot
+                counter_bot = 0
+            
+            # Filter for location
+            list_pass, list_fail = self.filter_both(lambda x: x.location in locations, list_users)
+            # print "list_pass", len(list_pass), "list_fail", len(list_fail)
+
+            # Write those that satisfy location criteria
+            f = open(self.path + '/' + outfile1, 'a')
+            for user in list_pass:
+                f.write('%d\n' % user.id)
+            f.close()
+
+            # Write those that fail location criteria
+            f = open(self.path + '/' + outfile2, 'a')
+            for user in list_fail:
+                f.write('%d\n' % user.id)
+            f.close()
+            
+            idx += 100
+        
+        
