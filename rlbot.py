@@ -39,7 +39,8 @@ class rlbot:
         self.remaining = {'followers':15, 'timeline':900, 'status_lookup':900,
                           'search':180,
                           'retweets':75, 'retweets_of_me':75, 'friends':15,
-                          'user':900, 'user_lookup':900, 'update':25}
+                          'user':900, 'user_lookup':900, 'update':25,
+                          'trends_place':75}
         
         # Initialize connection to API
         self.api = self.activate()
@@ -110,7 +111,8 @@ class rlbot:
         friends = limits['resources']['friends']
         users = limits['resources']['users']
         statuses = limits['resources']['statuses']
-        search = limits['resources']['search']    
+        search = limits['resources']['search']
+        trends = limits['resources']['trends']
 
         if choice == "followers":
             return followers['/followers/ids']['remaining'] # lim 15/15min
@@ -130,6 +132,8 @@ class rlbot:
             return statuses['/statuses/retweets/:id']['remaining'] # 75/15min
         elif choice == "retweets_of_me":
             return statuses['/statuses/retweets_of_me']['remaining'] # 75/15min
+        elif choice == "trends_place":
+            return trends['/trends/place']['remaining'] # 75/15min
         else:
             return 0
 
@@ -177,6 +181,8 @@ class rlbot:
             return statuses['/statuses/retweets/:id']['reset'] # 75/15min
         elif choice == "retweets_of_me":
             return statuses['/statuses/retweets_of_me']['reset'] # 75/15min
+        elif choice == "trends_place":
+            return trends['/trends/place']['reset'] # 75/15min
         else:
             return (time.time() + 5*60)
 
@@ -197,6 +203,7 @@ class rlbot:
         self.remaining['retweets_of_me'] = self.get_limits(limits, 'retweets_of_me')
         self.remaining['user'] = self.get_limits(limits, 'user')
         self.remaining['user_lookup'] = self.get_limits(limits, 'user_lookup')
+        self.remaining['trends_place'] = self.get_limits(limits, 'trends_place')
         self.remaining['update'] = 25
 
 
@@ -1004,6 +1011,39 @@ class rlbot:
                 print userid
                 print e
                 return 1
+
+
+    def get_trends_place(self, woeid=2357024, expected_location_name='Atlanta'):
+        """
+        Argument:
+        1. woeid - id of location
+        2. expected_location_name - name of location corresponding to woeid,
+        used as a check that the returned object by the API corresponds to the 
+        expected location
+
+        Returns:
+        1. list of trend objects
+        """
+        list_trends = []
+        done = 0
+        while done == 0:
+            if (self.remaining['trends_place'] != 0):
+                try:
+                    trends_dict = self.api.trends_place(woeid)[0]
+                    if trends_dict['locations'][0]['name'] != expected_location_name:
+                        print "%s get_trends_place() location mismatch" % self.name
+                    self.remaining['trends_place'] -= 1
+                    list_trends = trends_dict['trends']
+                    done = 1
+                except tweepy.RateLimitError:
+                    print "%s get_trends_place() rate limit error" % self.name
+                    self.wait_limit_reset('trends_place')
+                except tweepy.TweepError:
+                    return list_trends
+            else:
+                self.wait_limit_reset('trends_place')
+
+        return list_trends
 
 
     def monitor(self, id_list, duration, period):
