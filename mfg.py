@@ -11,7 +11,7 @@ class mfg:
         
         self.bots = []
         if init_bots:
-            for idx in range(6, 9):
+            for idx in range(1, 9):
                 self.bots.append( rlbot.rlbot(name='ml%d_gt'%idx,
                                               keyfile='key_bot%d.txt'%idx) )
         self.set_total_population = set()
@@ -80,7 +80,22 @@ class mfg:
         return list_pass, list_fail
 
 
-    def filter_location(self, sourcefile='followers_all.txt', locations=['Atlanta, GA', 'Atlanta'], outfile1='population_location_in.txt', outfile2='population_location_out.txt'):
+    def filt(self, user):
+        """ 
+        Argument:
+        1. user - user object
+
+        Checks whether user is based in Atlanta and account is not
+        protected (i.e. tweets can be seen)
+        """
+        locations = ['Atlanta, GA', 'Atlanta']
+        if (user.location in locations) and not user.protected:
+            return True
+        else:
+            return False
+
+
+    def filter_location(self, sourcefile='followers_all.txt', outfile1='population_location_in.txt', outfile2='population_location_out.txt'):
         """
         Arguments:
         1. sourcefile - each line is a user ID
@@ -89,8 +104,8 @@ class mfg:
         4. outfile2 - output file of user ID that fail location criteria
 
         Creates outfile1 and outfile2
-        Expected to take 5.4e6 / (3 * 900 * 100) / 4 = 5 hours
-        using 3 bots that each makes 900 requests per 15min,
+        Expected to take 3.337e6 / (8 * 900 * 100) / 4 = 1.15 hours
+        using 8 bots that each makes 900 requests per 15min,
         with each request handling 100 user IDs
         """
 
@@ -121,7 +136,7 @@ class mfg:
                 counter_bot = 0
             
             # Filter for location
-            list_pass, list_fail = self.filter_both(lambda x: x.location in locations, list_users)
+            list_pass, list_fail = self.filter_both(self.filt, list_users)
             # print "list_pass", len(list_pass), "list_fail", len(list_fail)
 
             # Write those that satisfy location criteria
