@@ -205,10 +205,12 @@ class mfg:
                 map_user_lasttweet[uid] = ''            
 
             # Check whether need to switch to another bot for get_timeline
+            # Limit is 900req/15min, leave margin of 10
             counter_bot += 1
-            if counter_bot == 900:
+            if counter_bot == 890:
                 # go to next bot
                 choice_bot = (choice_bot + 1) % len(self.bots) 
+                print "Switch to %d" % choice_bot
                 counter_bot = 0 # reset counter
 
         print "Exiting initialize_maps() at ", datetime.datetime.now()
@@ -241,9 +243,10 @@ class mfg:
 
             # Check whether need to switch to another bot for get_timeline
             counter_bot += 1
-            if counter_bot == 900:
+            if counter_bot == 890:
                 # go to next bot
                 choice_bot = (choice_bot + 1) % len(self.bots) 
+                print "Switch to %d" % choice_bot
                 counter_bot = 0 # reset counter
 
             # Determine whether any of user's tweets during day is a response to any trend
@@ -302,7 +305,7 @@ class mfg:
         f.close()
 
 
-    def record_population_activity(self, num_days=7, population='population_location_in.txt'):
+    def record_population_activity(self, num_days=7, population='population_location_in_part1.txt'):
         """
         Arguments:
         1. num_days - number of days to record activity
@@ -325,7 +328,7 @@ class mfg:
             self.map_user_count[uid] = 0
 
         day = 0
-        self.wait_until(nextday=1, hour=5)
+        self.wait_until(nextday=1, hour=1)
 
         while day < num_days:
             day += 1
