@@ -468,41 +468,105 @@ class rlbot:
         return list_like, list_retweet
 
         
-    def get_timeline_since(self, userid, since, verbose=0):
+#    def get_timeline_since(self, userid, since, verbose=0):
+#        """
+#        Returns all tweets posted since the tweet with id=since        
+#        
+#        Arguments:
+#        1. userid - user ID or scree_name (if none, then user is this bot)
+#        2. since - id_str of the tweet such that all tweets more recent than this
+#                    will be returned, not including this tweet
+#        
+#        Returns:
+#        1. list of TWEET objects, ordered from most recent to oldest     
+#        """        
+#        tweet_list = []
+#
+#        found = 0
+#        done = 0
+#        # initial acquisition
+#        while done == 0:
+#            if ( self.remaining['timeline'] != 0 ):
+#                try:
+#                    tweets = self.api.user_timeline(userid, count=200)
+#                    self.remaining['timeline'] -= 1
+#                    if len(tweets) == 0:
+#                        return tweet_list
+#                    else:
+#                        tweet_list.extend(tweets)
+#                        for idx in range(0, len(tweet_list)):
+#                            # If found the tweet with id_str = since, return the
+#                            # slice with higher indices
+#                            if tweet_list[idx].id_str == since:
+#                                found = 1
+#                                return tweet_list[:idx]
+#                        # starting point of next acquisition
+#                        last = tweet_list[-1].id - 1
+#                        done = 1
+#                except tweepy.RateLimitError:
+#                    print "%s get_timeline_since() rate limit error" % self.name
+#                    self.wait_limit_reset('timeline')
+#                except tweepy.TweepError:
+#                    return tweet_list
+#            else:
+#                self.wait_limit_reset('timeline')
+#
+#        # While not found, search further back in time starting from last
+#        while found == 0 and len(tweets) != 0:
+#            done = 0
+#            while done == 0:
+#                if ( self.remaining['timeline'] != 0 ):
+#                    try:
+#                        tweets = self.api.user_timeline(userid, count=200, 
+#                                                            max_id=last)
+#                        self.remaining['timeline'] -= 1
+#                        if len(tweets) == 0: # no more to find, so return empty list
+#                            return []
+#                        else:
+#                            idx_start = len(tweet_list)
+#                            tweet_list.extend(tweets)
+#                            for idx in range(idx_start, len(tweet_list)):
+#                                if tweet_list[idx].id_str == since:
+#                                    found = 1
+#                                    return tweet_list[:idx]
+#                            last = tweet_list[-1].id - 1
+#                            done = 1
+#                    except tweepy.RateLimitError:
+#                        print "%s get_timeline_since() rate limit error" % self.name
+#                        self.wait_limit_reset('timeline')
+#                    except tweepy.TweepError:
+#                        return tweet_list
+#                else:
+#                    self.wait_limit_reset('timeline')
+#                
+#        if verbose:
+#            for tweet in tweet_list:
+#                print tweet.text
+#
+#        return tweet_list
+
+    def get_timeline_since(self, userid, since):
         """
-        Returns all tweets posted since the tweet with id=since        
-        
         Arguments:
         1. userid - user ID or scree_name (if none, then user is this bot)
-        2. since - id_str of the tweet such that all tweets more recent than this
-                    will be returned, not including this tweet
+        2. since - id_str of the tweet such that all tweets more recent than it,
+        not including itself, should be returned
         
         Returns:
-        1. list of TWEET objects, ordered from most recent to oldest     
-        """        
+        1. list of TWEET objects, ordered from most recent to oldest, more recent
+        than the tweet with id_str=since; or, if the tweet with id_str=since
+        occurred more than 200 tweets ago, then return the most recent 200 tweets.
+        """
         tweet_list = []
 
-        found = 0
         done = 0
-        # initial acquisition
         while done == 0:
             if ( self.remaining['timeline'] != 0 ):
                 try:
-                    tweets = self.api.user_timeline(userid, count=200)
+                    tweet_list = self.api.user_timeline(userid, since_id=since, 
+                                                    count=200)
                     self.remaining['timeline'] -= 1
-                    if len(tweets) == 0:
-                        return tweet_list
-                    else:
-                        tweet_list.extend(tweets)
-                        for idx in range(0, len(tweet_list)):
-                            # If found the tweet with id_str = since, return the
-                            # slice with higher indices
-                            if tweet_list[idx].id_str == since:
-                                found = 1
-                                return tweet_list[:idx]
-                        # starting point of next acquisition
-                        last = tweet_list[-1].id - 1
-                        done = 1
+                    done = 1
                 except tweepy.RateLimitError:
                     print "%s get_timeline_since() rate limit error" % self.name
                     self.wait_limit_reset('timeline')
@@ -511,41 +575,9 @@ class rlbot:
             else:
                 self.wait_limit_reset('timeline')
 
-        # While not found, search further back in time starting from last
-        while found == 0 and len(tweets) != 0:
-            done = 0
-            while done == 0:
-                if ( self.remaining['timeline'] != 0 ):
-                    try:
-                        tweets = self.api.user_timeline(userid, count=200, 
-                                                            max_id=last)
-                        self.remaining['timeline'] -= 1
-                        if len(tweets) == 0: # no more to find, so return empty list
-                            return []
-                        else:
-                            idx_start = len(tweet_list)
-                            tweet_list.extend(tweets)
-                            for idx in range(idx_start, len(tweet_list)):
-                                if tweet_list[idx].id_str == since:
-                                    found = 1
-                                    return tweet_list[:idx]
-                            last = tweet_list[-1].id - 1
-                            done = 1
-                    except tweepy.RateLimitError:
-                        print "%s get_timeline_since() rate limit error" % self.name
-                        self.wait_limit_reset('timeline')
-                    except tweepy.TweepError:
-                        return tweet_list
-                else:
-                    self.wait_limit_reset('timeline')
-                
-        if verbose:
-            for tweet in tweet_list:
-                print tweet.text
-
         return tweet_list
-        
-            
+
+
     def get_timeline(self, userid=None, n=20, verbose=0):
         """
         Gets n most recent tweets posted by the specified user
