@@ -207,10 +207,10 @@ class mfg:
             # Check whether need to switch to another bot for get_timeline
             # Limit is 900req/15min, leave margin of 10
             counter_bot += 1
-            if counter_bot == 890:
+            if counter_bot == 895:
                 # go to next bot
                 choice_bot = (choice_bot + 1) % len(self.bots) 
-                print "Switch to %d" % choice_bot
+                print "Switch to %d at" % choice_bot, datetime.datetime.now()
                 counter_bot = 0 # reset counter
 
         print "Exiting initialize_maps() at ", datetime.datetime.now()
@@ -232,6 +232,8 @@ class mfg:
         counter_bot = 0
         # Bot to use for get_timeline_since(). Cyclic
         choice_bot = 0
+        # Initialize rate limit with margin
+        request_limit = (900 - 5)
 
         for uid in list_ids:
             last_tweet = map_user_lasttweet[uid]
@@ -240,13 +242,15 @@ class mfg:
             else:
                 tweets = self.bots[choice_bot].get_timeline(uid, verbose=0)
 
-
             # Check whether need to switch to another bot for get_timeline
             counter_bot += 1
-            if counter_bot == 890:
+            if counter_bot >= request_limit:
                 # go to next bot
                 choice_bot = (choice_bot + 1) % len(self.bots) 
-                print "Switch to %d" % choice_bot
+                limits = self.bots[choice_bot].api.rate_limit_status()
+                request_limit = self.bots[choice_bot].get_limits(limits, 'timeline')
+                print "Switch to ml%d_gt with limit %d -5 at " % (choice_bot+1, request_limit), datetime.datetime.now()
+                request_limit = max(0, request_limit-5) # apply margin
                 counter_bot = 0 # reset counter
 
             # Determine whether any of user's tweets during day is a response to any trend
@@ -292,20 +296,20 @@ class mfg:
         return list_trend_names, list_pairs
 
 
-    def write_activity(self):
+    def write_activity(self, day):
         """
         Write file with format
         <uid>,<number of days when user has responded to trending topic, up to current day>
         Overwrites previous day file
         """
         print "Inside write_activity() at ", datetime.datetime.now()
-        f = open(self.path + '/' + 'map_user_count.csv', 'w')
+        f = open(self.path + '/' + 'map_user_count_day%d.csv' % day, 'w')
         for uid, count in self.map_user_count.iteritems():
             f.write('%s,%d\n' % (uid, count))
         f.close()
 
 
-    def record_population_activity(self, num_days=7, population='population_location_in_part1.txt'):
+    def record_population_activity(self, day_start=0, nextday=1, hour_start=1, num_days=7, population='population_location_in_part1.txt'):
         """
         Arguments:
         1. num_days - number of days to record activity
@@ -327,8 +331,8 @@ class mfg:
         for uid in list_ids:
             self.map_user_count[uid] = 0
 
-        day = 0
-        self.wait_until(nextday=1, hour=1)
+        day = day_start
+        self.wait_until(nextday=nextday, hour=hour_start)
 
         while day < num_days:
             day += 1
@@ -349,7 +353,8 @@ class mfg:
             # Record trends at start of day
             f = open(self.path + '/' + 'trends_day%d_start.csv' % day, 'w')
             for pair in list_pairs:
-                f.write('%d,%s\n' % (pair[0], pair[1]))
+                s = '%d,%s\n' % (pair[0], pair[1])
+                f.write(s.encode('utf8'))
             f.close()
 
             # Wait until 12 midnight
@@ -361,7 +366,8 @@ class mfg:
             # Record list of trends at end of day 
             f = open(self.path + '/' + 'trends_day%d_end.csv' % day, 'w')
             for pair in list_pairs_end:
-                f.write('%d,%s\n' % (pair[0], pair[1]))
+                s = '%d,%s\n' % (pair[0], pair[1])
+                f.write(s.encode('utf8'))
             f.close()           
             
             # At end of day, for each user, get list of posts by that user 
@@ -369,5 +375,5 @@ class mfg:
             # find out whether the person responded to a trend during day. 
             self.process_day(list_ids, map_user_lasttweet, list_trend_names)
 
-            self.write_activity()
+            self.write_activity(day)
 
