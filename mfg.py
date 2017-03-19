@@ -377,3 +377,45 @@ class mfg:
 
             self.write_activity(day)
 
+
+    def filter_active(self, num_days=4, criteria=1, 
+                      outfile='population_active.txt'):
+        """
+        Filters the files map_user_count_day*.csv to find
+        the subset of people who respond to trends
+
+        Argument:
+        0. num_days - number of days for which there are 
+        'map_user_count_day*.csv' files
+        1. criteria - number of responses that users must have made to be
+        considered "active"
+        2. outfile - filename of output file containing the list of 
+        filtered user_ids
+        """
+        
+        map_user_count = {}
+
+        f = open(self.path+'/'+'map_user_count_day0.csv', 'r')
+        lines = f.readlines()
+        f.close()
+        lines = map( (lambda x: x.strip().split(',')), lines)
+        
+        # Populate key-value pairs using day0
+        for pair in lines:
+            map_user_count[pair[0]] = int(pair[1])
+
+        # For the rest of the days
+        for day in range(1, num_days):
+            f = open(self.path+'/'+'map_user_count_day%d.csv' % day, 'r')
+            lines = f.readlines()
+            f.close()
+            lines = map( (lambda x: x.strip().split(',')), lines)
+            for pair in lines:
+                map_user_count[pair[0]] += int(pair[1])
+
+        # Filter using criteria and write to output file
+        f = open(self.path+'/'+outfile, 'w')
+        for key, val in map_user_count.iteritems():
+            if val >= criteria:
+                f.write('%s\n' % key)
+        f.close()
