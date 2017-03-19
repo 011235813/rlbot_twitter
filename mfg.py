@@ -3,6 +3,7 @@ import rlbot
 import time
 import random
 import datetime
+import operator
 
 class mfg:
 
@@ -18,6 +19,13 @@ class mfg:
         self.woeid_atlanta = 2357024
         # Map from user id_str to count of response to trending topic
         self.map_user_count = {}
+        # Map from trend name to count of response by population to that
+        # trend
+        self.map_trend_count = {}
+        # Map from user to most recent tweet measured
+        self.map_user_lasttweet = {}
+        # List of trend names measured at start of day
+        self.list_trend_names = []
         
 
     def get_total_population(self, sourcefile='atlanta_popular.txt', outfile='followers_all.txt'):
@@ -173,7 +181,7 @@ class mfg:
         t_now = datetime.datetime.now()
         sec_until_start = hour*3600 + minute*60 + second - (t_now.hour*3600 + t_now.minute*60 + t_now.second)
         if sec_until_start > 0:
-            print "Sleep for %d seconds until start of day" % sec_until_start
+            print "Sleep for %d seconds until (%d,%d,%d)" % (sec_until_start, hour, minute, second)
             time.sleep(sec_until_start)
         
 
@@ -282,16 +290,17 @@ class mfg:
 
         list_trend_names = []
         list_pairs = []
-        # Extract list of trend names
-        # Also create list of pairs (count, name)
+        # Create list of pairs (count, name)
         for trend in list_trends:
-            list_trend_names.append(trend['name'])
             count = trend['tweet_volume']
             if count == None:
                 count = 0
             list_pairs.append( (count, trend['name']) )
-        # Sort the pairs in descending order
-        list_pairs.sort(reverse=True)
+        # Sort the pairs in descending order, first by tweet_volume then
+        # by text
+        list_pairs.sort(key=operator.itemgetter(0,1), reverse=True)
+        for pair in list_pairs:
+            list_trend_names.append( pair[1] )
 
         return list_trend_names, list_pairs
 
@@ -312,8 +321,11 @@ class mfg:
     def record_population_activity(self, day_start=0, nextday=1, hour_start=1, num_days=7, population='population_location_in_part1.txt'):
         """
         Arguments:
-        1. num_days - number of days to record activity
-        2. population - name of file of user IDs of people to track
+        1. day_start - in case need to restart function
+        2. nextday - whether or not start on the next day
+        3. hour_start - 0-24
+        4. num_days - number of days to record activity
+        5. population - name of file of user IDs of people to track
 
         Output:
         A map from userid to count of response to daily trending topics
@@ -419,3 +431,162 @@ class mfg:
             if val >= criteria:
                 f.write('%s\n' % key)
         f.close()
+
+
+    def process_hour(self, list_ids):
+        """
+        Arguments:
+        1. list_ids - list of id_str of users in population
+        
+        Called at start of every hour to record distribution over trends
+        Also updates self.map_user_lasttweet to prepare for the next hour
+        """
+        print "Inside process_hour() at ", datetime.datetime.now()
+        # Counter for get_timeline_since() rate limit
+        counter_bot = 0
+        # Bot to use for get_timeline_since(). Cyclic
+        choice_bot = 0
+        # Initialize rate limit with margin
+        request_limit = (900 - 5)
+
+        for uid in list_ids:
+            last_tweet = self.map_user_lasttweet[uid]
+            if last_tweet != '':
+                tweets = self.bots[choice_bot].get_timeline_since(uid, since=last_tweet)
+            else:
+                tweets = self.bots[choice_bot].get_timeline(uid, verbose=0)
+
+            # Check whether need to switch to another bot for get_timeline
+            counter_bot += 1
+            if counter_bot >= request_limit:
+                # go to next bot
+                choice_bot = (choice_bot + 1) % len(self.bots) 
+                limits = self.bots[choice_bot].api.rate_limit_status()
+                request_limit = self.bots[choice_bot].get_limits(limits, 'timeline')
+                print "Switch to ml%d_gt with limit %d -5 at " % (choice_bot+1, request_limit), datetime.datetime.now()
+                request_limit = max(0, request_limit-5) # apply margin
+                counter_bot = 0 # reset counter
+
+            # Determine whether any of user's tweets since the last tweet
+            # is a response to any trend
+            # Increment count by one if so
+            responded = 0
+            for trend in self.list_trend_names:
+                for tweet in tweets:
+                    if trend in tweet.text:
+                        # Increment trend count
+                        self.map_trend_count[trend] += 1
+                        responded = 1
+                        # Stop going through tweets for this trend,
+                        # since each person only counts once
+                        break
+            # If did not respond, then user belongs to the no_response
+            # category
+            if responded == 0:
+                self.map_trend_count['no_response'] += 1
+                
+            # Update self.map_user_lasttweet
+            if len(tweets) != 0:
+                self.map_user_lasttweet[uid] = tweets[0].id_str
+            else:
+                self.map_user_lasttweet[uid] = last_tweet
+
+        print "Exiting process_hour() at ", datetime.datetime.now()
+
+
+    def record_distribution(self, day_start=0, nextday=1, hour_start=1, num_days=30, population='population_active.txt'):
+        """
+        Primary function for recording the hourly 
+        evolution of the distribution
+        of people in population_active.txt, with respect to daily trends
+
+        Arguments:
+        1. day_start - in case need to restart function
+        2. nextday - whether or not start on the next day
+        3. hour_start - 0 to 24
+        4. num_days - number of days to record
+        5. population - name of file of user IDs of people to track
+
+        Output:
+        Daily output file with format:
+        topic_1, topic_2, ... , topic_d
+        num_hour1, num_hour1, ..., num_hour1
+        num_hour2, num_hour2, ..., num_hour2
+        ...
+        num_hourN, num_hourN, ..., num_hourN
+        """
+        
+        # Read in population
+        f = open(self.path + '/' + population, 'r')
+        list_ids = f.readlines()
+        f.close()
+        list_ids = map( (lambda x: x.strip()), list_ids )        
+
+        day = day_start
+        self.wait_until(nextday=nextday, hour=hour_start)
+
+        while day < num_days:
+            
+            day += 1
+            print "Day %d" % day
+
+            # Wait until 8am
+            self.wait_until(nextday=0, hour=8)
+                
+            # Get map from user ID to ID of last tweet
+            self.map_user_lasttweet = self.initialize_map(list_ids)
+                
+            # Wait until 9am
+            self.wait_until(nextday=0, hour=9)
+
+            # Get trends at start of day
+            self.list_trend_names, list_pairs = self.get_trends()
+
+            # Record trends at start of day
+            f = open(self.path+'/'+'trends_day%d.csv' % day, 'w')
+            for pair in list_pairs:
+                s = '%d,%s\n' % (pair[0], pair[1])
+                f.write(s.encode('utf8'))
+            f.close()
+
+            # Initialize distribution file
+            list_temp = ['no_response'] + self.list_trend_names
+            list_temp.append('\n')
+            f = open(self.path+'/'+'trend_distribution_day%d.csv' % day, 'a')            
+            f.write( (','.join(list_temp)).encode('utf8') )
+            f.close()
+
+            # Initialize map from trend to count
+            for name in self.list_trend_names:
+                self.map_trend_count[name] = 0
+            # Add additional category for people who did not
+            # respond to trends within the hour
+            self.map_trend_count['no_response'] = 0
+
+            hour = 9
+            # For each hour during the rest of day
+            while hour <= 24:
+                self.wait_until(nextday=0, hour=hour)
+
+                # Record distribution over topics
+                # Also updates self.map_user_lasttweet
+                self.process_hour(list_ids)
+                
+                # Record distribution
+                list_temp = [ self.map_trend_count['no_response'] ]
+                for name in self.list_trend_names:
+                    list_temp.append( self.map_trend_count[name] )
+                list_temp = map(str, list_temp)
+                list_temp.append('\n')
+                f = open(self.path+'/'+'trend_distribution_day%d.csv' % day, 'a')            
+                f.write( ','.join(list_temp) )
+                f.close()                
+
+                # Clear map_trend_count for the next hour
+                for name in self.map_trend_count.iterkeys():
+                    self.map_trend_count[name] = 0
+                
+                hour += 1
+
+
+            
