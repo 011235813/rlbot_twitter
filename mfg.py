@@ -543,7 +543,7 @@ class mfg:
             self.list_trend_names, list_pairs = self.get_trends()
 
             # Record trends at start of day
-            f = open(self.path+'/'+'trends_day%d.csv' % day, 'w')
+            f = open(self.path+'/distribution/'+'trends_day%d.csv' % day, 'w')
             for pair in list_pairs:
                 s = '%d,%s\n' % (pair[0], pair[1])
                 f.write(s.encode('utf8'))
@@ -552,7 +552,7 @@ class mfg:
             # Initialize distribution file
             list_temp = ['no_response'] + self.list_trend_names
             list_temp.append('\n')
-            f = open(self.path+'/'+'trend_distribution_day%d.csv' % day, 'a')            
+            f = open(self.path+'/distribution/'+'trend_distribution_day%d.csv' % day, 'a')            
             f.write( (','.join(list_temp)).encode('utf8') )
             f.close()
 
@@ -578,7 +578,7 @@ class mfg:
                     list_temp.append( self.map_trend_count[name] )
                 list_temp = map(str, list_temp)
                 list_temp.append('\n')
-                f = open(self.path+'/'+'trend_distribution_day%d.csv' % day, 'a')            
+                f = open(self.path+'/distribution/'+'trend_distribution_day%d.csv' % day, 'a')            
                 f.write( ','.join(list_temp) )
                 f.close()                
 
