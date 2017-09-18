@@ -1,0 +1,10 @@
+*.txt
+*.pyc
+*~
+*.json
+*.csv
+get_targets.py
+post_only.py
+post_times/
+report/
+scripts/
