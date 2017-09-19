@@ -7,9 +7,11 @@ import operator
 
 class mfg:
 
-    def __init__(self, init_bots=1):
-        self.path = '/home/t3500/devdata/mfg'
+    def __init__(self, init_bots=1, path='/home/t3500/devdata/mfg_round2'):
+        # Path for storing data
+        self.path = path
         
+        # Initialize bots
         self.bots = []
         if init_bots:
             for idx in range(1, 9):
@@ -30,7 +32,7 @@ class mfg:
 
     def get_total_population(self, sourcefile='atlanta_popular.txt', outfile='followers_all.txt'):
         """
-        For each account in atlanta_popular
+        For each account in sourcefile,
         use api.followers_ids with cursor to get 5000 follower IDs at a time,
         rate limit is 15 requests per 15 min
         Add these IDs to a set and save to file

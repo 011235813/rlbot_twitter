@@ -310,7 +310,7 @@ class rlbot:
                     self.remaining['followers'] -= 1
                     done = 1
                 except tweepy.RateLimitError:
-                    print "%s get_followers_cursored() rate limite error" % self.name
+                    print "%s get_followers_cursored() rate limit error" % self.name
                     self.wait_limit_reset('followers')
                 except tweepy.TweepError:
                     return followers
