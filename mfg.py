@@ -4,6 +4,7 @@ import time
 import random
 import datetime
 import operator
+import numpy as np
 
 class mfg:
 
@@ -28,6 +29,13 @@ class mfg:
         self.map_user_lasttweet = {}
         # List of trend names measured at start of day
         self.list_trend_names = []
+        # Map from trend name to list of user id_str who are in that topic
+        # self.map_trend_listuserid = {}
+        # Map from trend name to index
+        self.map_trend_idx = {}
+        # Map from user id_str to a single trend that the user responded to
+        # at the previous time step
+        self.map_user_trend = {}
         
 
     def get_total_population(self, sourcefile='atlanta_popular.txt', outfile='followers_all.txt'):
@@ -435,13 +443,22 @@ class mfg:
         f.close()
 
 
-    def process_hour(self, list_ids):
+    def process_hour(self, list_ids, d, initial=False):
         """
         Arguments:
         1. list_ids - list of id_str of users in population
+        2. d - number of trends
+        3. initial - if True, then does not record action; else, records action
         
-        Called at start of every hour to record distribution over trends
-        Also updates self.map_user_lasttweet to prepare for the next hour
+        Called at start of every hour to record distribution over trends.
+
+        Effects:
+        1. Updates self.map_trend_count with count of people in that trend at this time step
+        2. Updates self.map_user_lasttweet to prepare for the next hour
+        3. Updates self.map_trend_listuserid for transition matrix measurement
+        
+        Returns:
+        if initial=True, None; else, transition matrix
         """
         print "Inside process_hour() at ", datetime.datetime.now()
         # Counter for get_timeline_since() rate limit
@@ -450,6 +467,10 @@ class mfg:
         choice_bot = 0
         # Initialize rate limit with margin
         request_limit = (900 - 5)
+
+        # Initialize d x d transition matrix
+        if not initial:
+            matrix_transition = np.zeros((d,d), dtype=np.float)
 
         for uid in list_ids:
             last_tweet = self.map_user_lasttweet[uid]
@@ -469,23 +490,49 @@ class mfg:
                 request_limit = max(0, request_limit-5) # apply margin
                 counter_bot = 0 # reset counter
 
+            # If not at first hour, then map_user_trend should be already populated,
+            # where each user ID is mapped to the trend that the user was in
+            # at the previous hour. Extract that previous trend
+            if not initial:
+                trend_prev = self.map_user_trend[uid] # User's previous trend
+                idx_prev = self.map_trend_idx[trend_prev] # idx of previous trend
+
             # Determine whether any of user's tweets since the last tweet
-            # is a response to any trend
-            # Increment count by one if so
+            # is a response to any trend. Increment count by one if so.
+            # Also update transition matrix if initial=False
             responded = 0
             for trend in self.list_trend_names:
+                if responded:
+                    break
                 for tweet in tweets:
                     if trend in tweet.text:
                         # Increment trend count
                         self.map_trend_count[trend] += 1
                         responded = 1
+                        # Append user to list for the trend
+                        # self.map_trend_listuserid[trend].append(uid)
+
+                        if not initial:
+                            # Increment count in transition matrix
+                            idx_now = self.map_trend_idx[trend]
+                            matrix_transition[ idx_prev, idx_now ] += 1
+                        # Update map from user to trend
+                        self.map_user_trend[uid] = trend
                         # Stop going through tweets for this trend,
                         # since each person only counts once
                         break
+                    
             # If did not respond, then user belongs to the no_response
             # category
             if responded == 0:
                 self.map_trend_count['no_response'] += 1
+                # self.map_trend_listuserid['no_response'].append(uid)
+                # If not initial, increment count in transition matrix
+                if not initial:
+                    idx_now = self.map_trend_idx['no_response']
+                    matrix_transition[ idx_prev, idx_now ] += 1
+                # Update map from user to trend
+                self.map_user_trend[uid] = 'no_response'
                 
             # Update self.map_user_lasttweet
             if len(tweets) != 0:
@@ -494,9 +541,43 @@ class mfg:
                 self.map_user_lasttweet[uid] = last_tweet
 
         print "Exiting process_hour() at ", datetime.datetime.now()
+        if initial:
+            return None
+        else:
+            return matrix_transition
 
 
-    def record_distribution(self, day_start=0, nextday=1, hour_start=1, num_days=30, population='population_active.txt'):
+    def order_trends(self, d):
+        """
+        Arguments:
+        1. d - number of trends to keep
+
+        Internal variables:
+        1. self.map_trend_count
+        2. self.list_trend_names
+
+        Effect: changes self.list_trend_names so that names are ordered 
+        according to trend popularity in self.map_trend_count.
+        Assumes that self.map_trend_count represents the count at the 
+        start of the day.
+        """
+        list_pairs = []
+        for trend in self.list_trend_names:
+            count = self.map_trend_count[trend]
+            list_pairs.append( (count, trend) )
+        # Sort the pairs in descending order, first by tweet_volume then
+        # by text
+        list_pairs.sort(key=operator.itemgetter(0,1), reverse=True)
+        # Truncate to the top d trends (including no_response, so actually d-1 real trends)
+        list_pairs = list_pairs[:d]
+        # Reset list
+        self.list_trend_names = []
+        # Re-populate list, now ordered by decreasing initial popularity
+        for pair in list_pairs:
+            self.list_trend_names.append( pair[1] )
+        
+
+    def record_distribution(self, day_start=0, nextday=1, hour_start=1, num_days=30, population='population_active.txt', d=20):
         """
         Primary function for recording the hourly 
         evolution of the distribution
@@ -508,6 +589,7 @@ class mfg:
         3. hour_start - 0 to 24
         4. num_days - number of days to record
         5. population - name of file of user IDs of people to track
+        6. d - number of trending topics to record (excluding null topic)
 
         Output:
         Daily output file with format:
@@ -541,7 +623,7 @@ class mfg:
             # Wait until 9am
             self.wait_until(nextday=0, hour=9)
 
-            # Get trends at start of day
+            # Get trends at start of day, does not include no_response
             self.list_trend_names, list_pairs = self.get_trends()
 
             # Record trends at start of day
@@ -551,39 +633,75 @@ class mfg:
                 f.write(s.encode('utf8'))
             f.close()
 
-            # Initialize distribution file
-            list_temp = ['no_response'] + self.list_trend_names
-            list_temp.append('\n')
-            f = open(self.path+'/distribution/'+'trend_distribution_day%d.csv' % day, 'a')            
-            f.write( (','.join(list_temp)).encode('utf8') )
-            f.close()
+            # Add additional category for people who did not
+            # respond to trends
+            self.list_trend_names.append('no_response')
 
             # Initialize map from trend to count
             for name in self.list_trend_names:
                 self.map_trend_count[name] = 0
-            # Add additional category for people who did not
-            # respond to trends within the hour
-            self.map_trend_count['no_response'] = 0
 
-            hour = 9
+            # Initialize map from trend to list of user_id
+            # for trend in self.list_trend_names:
+            #     self.map_trend_listuserid[trend] = []
+
+            # Initialize map from userid to trend
+            for uid in list_ids:
+                self.map_user_trend[uid] = None
+
+            # Wait until 9am
+            self.wait_until(nextday=0, hour=9)
+
+            # Get initial popularity of each trend, so that trends can be sorted
+            self.process_hour(list_ids, d=d, initial=True)
+
+            # Order self.list_trend_names according to initial popularity
+            self.order_trends(d)
+
+            # Initialize map from trend to index
+            idx_temp = 0
+            for trend in self.list_trend_names:
+                self.map_trend_idx[trend] = idx_temp
+                idx_temp += 1
+
+            # Initialize distribution file, now ordered by decreasing initial popularity
+            list_temp = [] + self.list_trend_names
+            f = open(self.path+'/distribution/'+'trend_distribution_day%d.csv' % day, 'a')
+            f.write( (','.join(list_temp) + '\n').encode('utf8') )
+            f.close()
+
+            hour = 10
             # For each hour during the rest of day
             while hour <= 24:
                 self.wait_until(nextday=0, hour=hour)
 
-                # Record distribution over topics
-                # Also updates self.map_user_lasttweet
-                self.process_hour(list_ids)
+                # Record distribution over topics, updates self.map_trend_count
+                # Also updates self.map_user_lasttweet and self.map_user_trend
+                matrix_transition = self.process_hour(list_ids, d=d, initial=False)
+                # In case a row is empty (i.e. zero initial count for that trend)
+                # put 1 in the diagonal entry
+                n_rows = matrix_transition.shape[0]
+                for r in range(n_rows):
+                    if np.count_nonzero(matrix_transition[r, :]) == 0:
+                        matrix_transition[r, r] = 1.0
+                # Normalize each row
+                matrix_transition = matrix_transition / np.sum(matrix_transition, axis=1, keepdims=True)
                 
                 # Record distribution
-                list_temp = [ self.map_trend_count['no_response'] ]
+                list_temp = []
                 for name in self.list_trend_names:
                     list_temp.append( self.map_trend_count[name] )
                 list_temp = map(str, list_temp)
-                list_temp.append('\n')
+                # list_temp.append('\n')
                 f = open(self.path+'/distribution/'+'trend_distribution_day%d.csv' % day, 'a')            
-                f.write( ','.join(list_temp) )
-                f.close()                
+                f.write( ','.join(list_temp) + '\n' )
+                f.close()
 
+                # Write transition matrix to file
+                with open(self.path+'/distribution/'+'action_day%d.txt' % day, 'a') as f:
+                    np.savetxt(f, matrix_transition, fmt='%.3e')
+                    f.write('\n')
+                
                 # Clear map_trend_count for the next hour
                 for name in self.map_trend_count.iterkeys():
                     self.map_trend_count[name] = 0
