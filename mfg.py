@@ -29,8 +29,6 @@ class mfg:
         self.map_user_lasttweet = {}
         # List of trend names measured at start of day
         self.list_trend_names = []
-        # Map from trend name to list of user id_str who are in that topic
-        # self.map_trend_listuserid = {}
         # Map from trend name to index
         self.map_trend_idx = {}
         # Map from user id_str to a single trend that the user responded to
@@ -436,7 +434,6 @@ class mfg:
         Effects:
         1. Updates self.map_trend_count with count of people in that trend at this time step
         2. Updates self.map_user_lasttweet to prepare for the next hour
-        3. Updates self.map_trend_listuserid for transition matrix measurement
         
         Returns:
         if initial=True, None; else, transition matrix
@@ -490,8 +487,6 @@ class mfg:
                         # Increment trend count
                         self.map_trend_count[trend] += 1
                         responded = 1
-                        # Append user to list for the trend
-                        # self.map_trend_listuserid[trend].append(uid)
 
                         if not initial:
                             # Increment count in transition matrix
@@ -507,7 +502,6 @@ class mfg:
             # category
             if responded == 0:
                 self.map_trend_count['no_response'] += 1
-                # self.map_trend_listuserid['no_response'].append(uid)
                 # If not initial, increment count in transition matrix
                 if not initial:
                     idx_now = self.map_trend_idx['no_response']
@@ -607,13 +601,6 @@ class mfg:
             # Get trends at start of day, does not include no_response
             self.list_trend_names, list_pairs = self.get_trends()
 
-            # Record trends at start of day
-            f = open(self.path+'/distribution/'+'trends_day%d.csv' % day, 'w')
-            for pair in list_pairs:
-                s = '%d,%s\n' % (pair[0], pair[1])
-                f.write(s.encode('utf8'))
-            f.close()
-
             # Add additional category for people who did not
             # respond to trends
             self.list_trend_names.append('no_response')
@@ -622,22 +609,21 @@ class mfg:
             for name in self.list_trend_names:
                 self.map_trend_count[name] = 0
 
-            # Initialize map from trend to list of user_id
-            # for trend in self.list_trend_names:
-            #     self.map_trend_listuserid[trend] = []
-
             # Initialize map from userid to trend
             for uid in list_ids:
                 self.map_user_trend[uid] = None
-
-            # Wait until 9am
-            self.wait_until(nextday=0, hour=9)
 
             # Get initial popularity of each trend, so that trends can be sorted
             self.process_hour(list_ids, d=d, initial=True)
 
             # Order self.list_trend_names according to initial popularity
             self.order_trends(d)
+
+            # Record ordered trends at start of day
+            with open(self.path+'/distribution/'+'trends_day%d.csv' % day, 'w') as f:
+                for trend in self.list_trend_names:
+                    s = '%d,%s\n' % (self.map_trend_count[trend], trend)
+                    f.write(s.encode('utf8'))
 
             # Initialize map from trend to index
             idx_temp = 0
@@ -688,6 +674,3 @@ class mfg:
                     self.map_trend_count[name] = 0
                 
                 hour += 1
-
-
-            
