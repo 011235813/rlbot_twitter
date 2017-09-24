@@ -632,10 +632,19 @@ class mfg:
                 idx_temp += 1
 
             # Initialize distribution file, now ordered by decreasing initial popularity
-            list_temp = [] + self.list_trend_names
-            f = open(self.path+'/distribution/'+'trend_distribution_day%d.csv' % day, 'a')
-            f.write( (','.join(list_temp) + '\n').encode('utf8') )
-            f.close()
+            # Record distribution at 9am
+            list_names = [] + self.list_trend_names
+            list_counts = []
+            for name in self.list_trend_names:
+                list_counts.append( self.map_trend_count[name] )
+            list_counts = map(str, list_counts)
+            with open(self.path+'/distribution/'+'trend_distribution_day%d.csv' % day, 'a') as f:
+                f.write( (','.join(list_names) + '\n').encode('utf8') )
+                f.write( ','.join(list_counts) + '\n' )
+
+            # Clear map_trend_count for the next hour
+            for name in self.map_trend_count.iterkeys():
+                self.map_trend_count[name] = 0
 
             hour = 10
             # For each hour during the rest of day
@@ -659,8 +668,7 @@ class mfg:
                 for name in self.list_trend_names:
                     list_temp.append( self.map_trend_count[name] )
                 list_temp = map(str, list_temp)
-                # list_temp.append('\n')
-                f = open(self.path+'/distribution/'+'trend_distribution_day%d.csv' % day, 'a')            
+                f = open(self.path+'/distribution/'+'trend_distribution_day%d.csv' % day, 'a')
                 f.write( ','.join(list_temp) + '\n' )
                 f.close()
 
